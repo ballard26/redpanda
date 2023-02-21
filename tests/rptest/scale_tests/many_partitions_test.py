@@ -18,6 +18,7 @@ import numpy
 
 from rptest.services.cluster import cluster
 from rptest.clients.rpk import RpkTool, RpkException
+from rptest.utils.si_utils import nodes_report_cloud_segments
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.utils.si_utils import nodes_report_cloud_segments
 from rptest.services.rpk_consumer import RpkConsumer
@@ -616,7 +617,7 @@ class ManyPartitionsTest(PreallocNodesTest):
                     custom_node=[self.preallocated_nodes[0]])
                 producer.start()
                 wait_until(lambda: nodes_report_cloud_segments(
-                    self.redpanda, target_cloud_segments),
+                    self.redpanda, target_cloud_segments, self.logger),
                            timeout_sec=expect_runtime,
                            backoff_sec=5)
             finally:
