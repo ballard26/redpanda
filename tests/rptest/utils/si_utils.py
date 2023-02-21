@@ -3,6 +3,7 @@ import json
 import pprint
 import struct
 from collections import defaultdict, namedtuple
+from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, MetricsEndpoint
 from typing import Sequence, Optional
 import xxhash
 
@@ -301,6 +302,28 @@ def is_close_size(actual_size, expected_size):
     upper_bound = expected_size + default_log_segment_size + \
                   int(default_log_segment_size * 0.2)
     return actual_size in range(lower_bound, upper_bound)
+
+
+def nodes_report_cloud_segments(redpanda, target_segments, logger=None):
+    """
+    Returns true if the nodes in the cluster collectively report having
+    above the given number of segments.
+
+    NOTE: we're explicitly not checking the manifest via cloud client
+    because we expect the number of items in our bucket to be quite large,
+    and for associated ListObjects calls to take a long time.
+    """
+    try:
+        num_segments = redpanda.metric_sum(
+            "redpanda_cloud_storage_segments",
+            metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
+        if logger:
+            logger.info(
+                f"Cluster metrics report {num_segments} / {target_segments} cloud segments"
+            )
+    except:
+        return False
+    return num_segments >= target_segments
 
 
 class PathMatcher:
