@@ -8,15 +8,14 @@
 # by the Apache License, Version 2.0
 
 from ducktape.utils.util import wait_until
-
 from rptest.clients.rpk import RpkTool
 from rptest.services.cluster import cluster
 from rptest.services.failure_injector import FailureInjector, FailureSpec
-from rptest.utils.si_utils import nodes_report_cloud_segments
-from rptest.utils.node_operations import NodeDecommissionWaiter
-from rptest.tests.prealloc_nodes import PreallocNodesTest
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, SISettings
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
+from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, SISettings
+from rptest.tests.prealloc_nodes import PreallocNodesTest
+from rptest.utils.node_operations import NodeDecommissionWaiter
+from rptest.utils.si_utils import nodes_report_cloud_segments
 import time
 
 
