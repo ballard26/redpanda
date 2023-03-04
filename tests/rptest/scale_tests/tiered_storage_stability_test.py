@@ -7,6 +7,8 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
+import time
+
 from ducktape.utils.util import wait_until
 from rptest.clients.rpk import RpkTool
 from rptest.services.cluster import cluster
@@ -16,7 +18,6 @@ from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, SISettings
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.utils.node_operations import NodeDecommissionWaiter
 from rptest.utils.si_utils import nodes_report_cloud_segments
-import time
 
 
 class TieredStorageWithLoadTest(PreallocNodesTest):
@@ -29,6 +30,15 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
     LEADER_BALANCER_PERIOD_MS = 30000
     topic_name = "tiered_storage_topic"
     small_segment_size = 4 * 1024
+    regular_segment_size = 512 * 1024 * 1024
+    unscaled_data_bps = int(1.7 * 1024 * 1024 * 1024)
+    unscaled_num_partitions = 1024
+    num_brokers = 4
+    scaling_factor = num_brokers / 13
+    scaled_data_bps = int(unscaled_data_bps * scaling_factor)  # ~0.53 GiB/s
+    scaled_num_partitions = int(unscaled_num_partitions * scaling_factor)  # 315
+    scaled_segment_size = int(regular_segment_size * scaling_factor)
+    num_segments_per_partition = 1000
     unavailable_timeout = 60
 
     def __init__(self, test_ctx, *args, **kwargs):
@@ -36,7 +46,7 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
         super(TieredStorageWithLoadTest, self).__init__(
             test_ctx,
             *args,
-            num_brokers=4,
+            num_brokers=self.num_brokers,
             node_prealloc_count=1,
             extra_rp_conf={
                 # In testing tiered storage, we care about creating as many
@@ -57,16 +67,9 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
             log_segment_size=self.small_segment_size)
         self.redpanda.set_si_settings(si_settings)
         self.rpk = RpkTool(self.redpanda)
+        self.s3_port = si_settings.cloud_storage_api_endpoint_port
 
     def load_many_segments(self):
-        unscaled_data_bps = int(1.7 * 1024 * 1024 * 1024)
-        unscaled_num_partitions = 1024
-        scaling_factor = 4 / 13
-
-        data_bps = int(unscaled_data_bps * scaling_factor)  # ~0.53 GiB/s
-        num_partitions = int(unscaled_num_partitions * scaling_factor)  # 315
-        num_segments_per_partition = 1000
-
         config = {
             # Use a tiny segment size so we can generate many cloud segments
             # very quickly.
@@ -85,19 +88,19 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
             'raft_learner_recovery_rate': 10 * 1024 * 1024 * 1024,
         }
         self.rpk.create_topic(self.topic_name,
-                              partitions=num_partitions,
+                              partitions=self.scaled_num_partitions,
                               replicas=3,
                               config=config)
 
-        target_cloud_segments = num_segments_per_partition * num_partitions
+        target_cloud_segments = self.num_segments_per_partition * self.scaled_num_partitions
         producer = None
         try:
             producer = KgoVerifierProducer(
                 self.test_context,
                 self.redpanda,
                 self.topic_name,
-                self.small_segment_size,
-                int(2 * num_segments_per_partition * num_partitions),
+                self.small_segment_size,  # msg_size
+                int(2 * target_cloud_segments),  # msg_count
                 custom_node=[self.preallocated_nodes[0]])
             producer.start()
             wait_until(lambda: nodes_report_cloud_segments(self.redpanda,
@@ -111,9 +114,9 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
 
         # Once some segments are generated, configure the topic to use more
         # realistic sizes.
-        retention_bytes = int(data_bps * 60 * 60 * 6 / num_partitions)
+        retention_bytes = int(self.scaled_data_bps * 60 * 60 * 6 / self.scaled_num_partitions)
+        self.rpk.alter_topic_config(self.topic_name, 'segment.bytes', self.regular_segment_size)
         self.rpk.alter_topic_config(self.topic_name, 'retention.local.target.bytes', retention_bytes)
-        self.rpk.alter_topic_config(self.topic_name, 'segment.bytes', 512 * 1024 * 1024)
 
     def get_node(self, idx: int):
         node = self.redpanda.nodes[idx]
@@ -126,10 +129,6 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
         # Generate a realistic number of segments per partition.
         self.load_many_segments()
         producer = None
-        unscaled_data_bps = int(1.7 * 1024 * 1024 * 1024)
-        scaling_factor = 4 / 13
-
-        data_bps = int(unscaled_data_bps * scaling_factor)  # ~0.53 GiB/s
         try:
             producer = KgoVerifierProducer(
                 self.test_context,
@@ -137,7 +136,7 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
                 self.topic_name,
                 msg_size=128 * 1024,
                 msg_count=5 * 1024 * 1024 * 1024 * 1024,
-                rate_limit_bps=data_bps,
+                rate_limit_bps=self.scaled_data_bps,
                 custom_node=[self.preallocated_nodes[0]])
             producer.start()
             wait_until(lambda: producer.produce_status.acked > 10000,
