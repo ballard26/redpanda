@@ -160,7 +160,12 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
 
                 # Stop a node, wait for enough time for movement to occur, then
                 # restart.
-                self.stage_stop_wait_start()
+                self.stage_stop_wait_start(forced_stop=False, downtime=60)
+
+                # Stop a node and wait for really long time to collect a lot
+                # of underreplicated msgs, then restart.
+                # This is not to be run nightly so disabled for now
+                #self.stage_stop_wait_start(forced_stop=False, downtime=60*30)
 
                 # Block traffic to/from one node.
                 self.stage_block_node_traffic()
@@ -204,14 +209,22 @@ class TieredStorageWithLoadTest(PreallocNodesTest):
             pass
         wait_until(self.redpanda.healthy, timeout_sec=600, backoff_sec=1)
 
-    def stage_stop_wait_start(self):
+    def stage_stop_wait_start(self, forced_stop: bool, downtime: int):
         node, node_id, node_str = self.get_node(1)
-        self.logger.info(f"Hard stopping node {node_str}")
-        self.redpanda.stop_node(node, forced=True)
-        time.sleep(60)
-        self.logger.info(f"Restarting node {node_str}")
+        self.logger.info(
+            f"Stopping node {node_str} {'ungracefully' if forced_stop else 'gracefully'}"
+        )
+        self.redpanda.stop_node(node, forced=forced_stop, timeout=60 if forced_stop else 180)
+
+        self.logger.info(f"Node downtime {downtime} s")
+        time.sleep(downtime)
+
+        restart_timeout = 300 + int(900 * downtime / 60)
+        self.logger.info(f"Restarting node {node_str} for {restart_timeout} s")
         self.redpanda.start_node(node, timeout=600)
-        wait_until(self.redpanda.healthy, timeout_sec=600, backoff_sec=1)
+        wait_until(self.redpanda.healthy,
+                   timeout_sec=restart_timeout,
+                   backoff_sec=1)
 
 
     @cluster(num_nodes=5, log_allow_list=NOS3_LOG_ALLOW_LIST)
