@@ -7,10 +7,10 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-import re
-import time
 import itertools
 import math
+import re
+import time
 
 from ducktape.mark import ok_to_fail
 from ducktape.utils.util import wait_until
@@ -19,16 +19,17 @@ from rptest.services.cluster import cluster
 from rptest.services.failure_injector import FailureInjector, FailureSpec
 from rptest.services.kgo_verifier_services import (KgoVerifierProducer,
                                                    KgoVerifierRandomConsumer)
+from rptest.services.metrics_check import MetricCheck
+from rptest.services.openmessaging_benchmark import OpenMessagingBenchmark
+from rptest.services.openmessaging_benchmark_configs import \
+    OMBSampleConfigurations
 from rptest.services.redpanda import (RESTART_LOG_ALLOW_LIST, MetricsEndpoint,
                                       SISettings)
+from rptest.services.rpk_consumer import RpkConsumer
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.util import firewall_blocked
 from rptest.utils.node_operations import NodeDecommissionWaiter
 from rptest.utils.si_utils import nodes_report_cloud_segments
-from rptest.services.rpk_consumer import RpkConsumer
-from rptest.services.metrics_check import MetricCheck
-from rptest.services.openmessaging_benchmark import OpenMessagingBenchmark
-from rptest.services.openmessaging_benchmark_configs import OMBSampleConfigurations
 
 
 class HighThroughputTest(PreallocNodesTest):
@@ -73,7 +74,6 @@ class HighThroughputTest(PreallocNodesTest):
                 # to pad out tiered storage metadata, we don't want them to
                 # get merged together.
                 'cloud_storage_enable_segment_merging': False,
-
                 'disable_batch_cache': True,
                 'cloud_storage_cache_check_interval': 1000,
             },
@@ -82,18 +82,23 @@ class HighThroughputTest(PreallocNodesTest):
         si_settings = SISettings(
             self.redpanda._context,
             log_segment_size=self.small_segment_size,
-            cloud_storage_cache_size=10*1024*1024,
-            )
+            cloud_storage_cache_size=10 * 1024 * 1024,
+        )
         self.redpanda.set_si_settings(si_settings)
         self.rpk = RpkTool(self.redpanda)
         self.s3_port = si_settings.cloud_storage_api_endpoint_port
 
-    def setup_cluster(self, segment_bytes: int, retention_local_bytes: int, extra_cluster_props: dict = {}):
-        self.redpanda.set_cluster_config({
-            'partition_autobalancing_node_availability_timeout_sec': self.unavailable_timeout,
-            'partition_autobalancing_mode': 'continuous',
-            'raft_learner_recovery_rate': 10 * 1024 * 1024 * 1024,
-        } | extra_cluster_props)
+    def setup_cluster(self,
+                      segment_bytes: int,
+                      retention_local_bytes: int,
+                      extra_cluster_props: dict = {}):
+        self.redpanda.set_cluster_config(
+            {
+                'partition_autobalancing_node_availability_timeout_sec':
+                self.unavailable_timeout,
+                'partition_autobalancing_mode': 'continuous',
+                'raft_learner_recovery_rate': 10 * 1024 * 1024 * 1024,
+            } | extra_cluster_props)
         topic_config = {
             # Use a tiny segment size so we can generate many cloud segments
             # very quickly.
@@ -180,8 +185,8 @@ class HighThroughputTest(PreallocNodesTest):
             try:
                 producer.start()
                 wait_until(lambda: producer.produce_status.acked > 10000,
-                        timeout_sec=60,
-                        backoff_sec=1.0)
+                           timeout_sec=60,
+                           backoff_sec=1.0)
 
                 # Run a rolling restart.
                 self.stage_rolling_restart()
@@ -216,12 +221,13 @@ class HighThroughputTest(PreallocNodesTest):
                    " detected, code: RequestTimeout"),
     ]
 
-
     # Stages for the "test_restarts"
 
     def stage_rolling_restart(self):
         self.logger.info(f"Rolling restarting nodes")
-        self.redpanda.rolling_restart_nodes(self.redpanda.nodes, start_timeout=600, stop_timeout=600)
+        self.redpanda.rolling_restart_nodes(self.redpanda.nodes,
+                                            start_timeout=600,
+                                            stop_timeout=600)
 
     def stage_block_node_traffic(self):
         node, node_id, node_str = self.get_node(0)
@@ -244,7 +250,9 @@ class HighThroughputTest(PreallocNodesTest):
         self.logger.info(
             f"Stopping node {node_str} {'ungracefully' if forced_stop else 'gracefully'}"
         )
-        self.redpanda.stop_node(node, forced=forced_stop, timeout=60 if forced_stop else 180)
+        self.redpanda.stop_node(node,
+                                forced=forced_stop,
+                                timeout=60 if forced_stop else 180)
 
         self.logger.info(f"Node downtime {downtime} s")
         time.sleep(downtime)
@@ -256,7 +264,6 @@ class HighThroughputTest(PreallocNodesTest):
                    timeout_sec=restart_timeout,
                    backoff_sec=1)
 
-
     @cluster(num_nodes=5, log_allow_list=NOS3_LOG_ALLOW_LIST)
     def test_with_cloud_storage(self):
         """
@@ -266,7 +273,7 @@ class HighThroughputTest(PreallocNodesTest):
         self.setup_cluster(
             # Segments should go into the cloud at a reasonable rate,
             # that's why it is smaller than it should be
-            segment_bytes = int(self.scaled_segment_size/2),
+            segment_bytes=int(self.scaled_segment_size / 2),
             retention_local_bytes=2 * self.scaled_segment_size,
         )
 
@@ -315,45 +322,67 @@ class HighThroughputTest(PreallocNodesTest):
         self.last_num_errors = 0
         with firewall_blocked(self.redpanda.nodes, self.s3_port):
             # wait for the first cloud related failure + one minute
-            wait_until(lambda: not self._cloud_storage_no_new_errors(self.redpanda, self.logger),
-                       timeout_sec=600, backoff_sec=10)
+            wait_until(lambda: not self._cloud_storage_no_new_errors(
+                self.redpanda, self.logger),
+                       timeout_sec=600,
+                       backoff_sec=10)
             time.sleep(60)
         # make sure nothing is crashed
         wait_until(self.redpanda.healthy, timeout_sec=60, backoff_sec=1)
         self.logger.info(f"Waiting for S3 errors to cease")
-        wait_until(lambda: self._cloud_storage_no_new_errors(self.redpanda, self.logger),
-                       timeout_sec=600, backoff_sec=20)
+        wait_until(lambda: self._cloud_storage_no_new_errors(
+            self.redpanda, self.logger),
+                   timeout_sec=600,
+                   backoff_sec=20)
 
     def stage_decommission_and_add(self):
         node, node_id, node_str = self.get_node(1)
+
         def partitions_in_nt(self):
             try:
                 parts = self.redpanda.partitions(self.topic_name)
             except StopIteration:
                 return 0
-            n = sum([1 if r.account==node.account else 0 for p in parts for r in p.replicas])
-            self.logger.debug ( f"Partitions in the node-topic: {n}" )
+            n = sum([
+                1 if r.account == node.account else 0 for p in parts
+                for r in p.replicas
+            ])
+            self.logger.debug(f"Partitions in the node-topic: {n}")
             return n
+
         nt_partitions_before = partitions_in_nt(self)
 
-        self.logger.info(f"Decommissioning node {node_str}, partitions: {nt_partitions_before}")
+        self.logger.info(
+            f"Decommissioning node {node_str}, partitions: {nt_partitions_before}"
+        )
         decomm_time = time.monotonic()
         admin = self.redpanda._admin
         admin.decommission_broker(node_id)
-        waiter = NodeDecommissionWaiter(self.redpanda, node_id, self.logger, progress_timeout=120)
+        waiter = NodeDecommissionWaiter(self.redpanda,
+                                        node_id,
+                                        self.logger,
+                                        progress_timeout=120)
         waiter.wait_for_removal()
         self.redpanda.stop_node(node)
-        assert partitions_in_nt(self)==0
+        assert partitions_in_nt(self) == 0
         decomm_time = time.monotonic() - decomm_time
 
         self.logger.info(f"Adding a node")
-        self.redpanda.clean_node(node, preserve_logs=True, preserve_current_install=True)
-        self.redpanda.start_node(node, auto_assign_node_id=False, omit_seeds_on_idx_one=False)
+        self.redpanda.clean_node(node,
+                                 preserve_logs=True,
+                                 preserve_current_install=True)
+        self.redpanda.start_node(node,
+                                 auto_assign_node_id=False,
+                                 omit_seeds_on_idx_one=False)
         wait_until(self.redpanda.healthy, timeout_sec=600, backoff_sec=1)
         new_node_id = self.redpanda.node_id(node, force_refresh=True)
 
-        self.logger.info(f"Node added, new node_id: {new_node_id}, waiting for {int(nt_partitions_before/2)} partitions to move there in {int(decomm_time)} s")
-        wait_until(lambda: partitions_in_nt(self)>nt_partitions_before/2, timeout_sec=max(60,decomm_time), backoff_sec=2)
+        self.logger.info(
+            f"Node added, new node_id: {new_node_id}, waiting for {int(nt_partitions_before/2)} partitions to move there in {int(decomm_time)} s"
+        )
+        wait_until(lambda: partitions_in_nt(self) > nt_partitions_before / 2,
+                   timeout_sec=max(60, decomm_time),
+                   backoff_sec=2)
         self.logger.info(f"{partitions_in_nt(self)} partitions moved")
 
     @cluster(num_nodes=5, log_allow_list=NOS3_LOG_ALLOW_LIST)
@@ -363,12 +392,11 @@ class HighThroughputTest(PreallocNodesTest):
         consumers
         """
         segment_size = int(self.scaled_segment_size / 8)
-        self.setup_cluster(
-            segment_bytes=segment_size,
-            retention_local_bytes=2 * segment_size,
-            extra_cluster_props={
-                'cloud_storage_max_readers_per_shard': 256,
-            })
+        self.setup_cluster(segment_bytes=segment_size,
+                           retention_local_bytes=2 * segment_size,
+                           extra_cluster_props={
+                               'cloud_storage_max_readers_per_shard': 256,
+                           })
 
         try:
             producer = KgoVerifierProducer(
