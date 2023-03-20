@@ -128,12 +128,12 @@ private:
     ss::file _out;
     options _opts;
     bool _closed{false};
-    size_t _committed_offset{0};
-    size_t _fallocation_offset{0};
-    size_t _bytes_flush_pending{0};
+    size_t _committed_offset{0}; // has a background write scheduled, but may not be written
+    size_t _fallocation_offset{0}; // available room left in file
+    size_t _bytes_flush_pending{0}; // written to `_head` but not to disk
     ssx::semaphore _concurrent_flushes;
     ss::lw_shared_ptr<chunk> _head;
-    ss::lw_shared_ptr<ssx::semaphore> _prev_head_write;
+    ss::lw_shared_ptr<ssx::semaphore> _prev_head_write; // orders writes to disk for each head chunk
 
     struct flush_op {
         explicit flush_op(size_t offset)
@@ -144,7 +144,9 @@ private:
 
     std::vector<flush_op> _flush_ops;
     size_t _flushed_offset{0};
-    size_t _stable_offset{0};
+    size_t _stable_offset{0}; // written to disk but not yet flushed
+
+    size_t coalesced_writes{0};
 
     // like flush, but wait on fibers. used by truncate() and close() which are
     // still heavy weight operations compared to regular flush()
@@ -154,12 +156,22 @@ private:
         bool done;
         size_t offset;
 
-        explicit inflight_write(size_t offset)
+        ss::lw_shared_ptr<chunk> head;
+        const char* src;
+        size_t expected;
+        bool full;
+
+        explicit inflight_write(size_t offset, ss::lw_shared_ptr<chunk> head, const char* src, size_t expected, bool full)
           : done(false)
-          , offset(offset) {}
+          , offset(offset) 
+          , head(std::move(head)) 
+          , src(src)
+          , expected(expected)
+          , full(full)
+        {}
     };
 
-    ss::chunked_fifo<ss::lw_shared_ptr<inflight_write>> _inflight;
+    ss::chunked_fifo<ss::lw_shared_ptr<inflight_write>> _inflight; // ensures that _stable_offset isn't updated until oldest write completes
     callbacks* _callbacks = nullptr;
     ss::future<>
     maybe_advance_stable_offset(const ss::lw_shared_ptr<inflight_write>&);
