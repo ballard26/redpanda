@@ -445,8 +445,8 @@ void segment_appender::dispatch_background_head_write() {
     _bytes_flush_pending -= _head->bytes_pending();
     // background write
     _head->flush();
-    _inflight.emplace_back(
-      ss::make_lw_shared<inflight_write>(_committed_offset));
+    _inflight.emplace_back(ss::make_lw_shared<inflight_write>(
+      _committed_offset, _head, src, expected, _head->is_full()));
     auto w = _inflight.back();
 
     /*
@@ -481,24 +481,126 @@ void segment_appender::dispatch_background_head_write() {
           return units
             .then([this, h, w, start_offset, expected, src, full](
                     ssx::semaphore_units u) mutable {
+                // Check if this scheduled write was written by a
+                // previous write.
+                if (w->done) {
+                    return ss::make_ready_future<>();
+                }
+
+                size_t current_expected = expected;
+                bool current_full = full;
+
+                // Rather than write a partially empty chunk check if there
+                // are any other writes to this chunk in flight and coalesce
+                // them together.
+                if (!full && _inflight.back() != w) {
+                    /*
+                    vlog(
+                      stlog.info,
+                      "starting write coalescing for head {} and src {}",
+                      (void*)&*h,
+                      (void*)src);
+                      */
+
+                    bool found_subseq = false;
+
+                    for (auto& inflight_write : _inflight) {
+                        /*
+                        vlog(
+                          stlog.info,
+                          "write: head={} done={} src={} expected={} "
+                          "current_expected={}",
+                          (void*)&*inflight_write->head,
+                          inflight_write->done,
+                          (void*)inflight_write->src,
+                          inflight_write->expected,
+                          current_expected);
+                          */
+                        // All writes to this chunk will appear as a
+                        // continuous sequence in _inflight though not
+                        // necessarily at the start. The logic below is
+                        // to skip all inflight writes before and after
+                        // writes to the chunk.
+                        if (inflight_write->head == h) {
+                            found_subseq = true;
+                        } else if (found_subseq && inflight_write->head != h) {
+                            break;
+                        } else {
+                            continue;
+                        }
+
+                        // Skip any writes that have already been completed.
+                        if (inflight_write->done) {
+                            continue;
+                        }
+
+                        if (inflight_write->src == src) {
+                            // _inflight is written synchronously in order
+                            // so these offsets should always be monotomically
+                            // increasing.
+                            vassert(
+                              current_expected <= inflight_write->expected,
+                              "expected offset should be increasing");
+                            current_expected = inflight_write->expected;
+                            current_full = inflight_write->full;
+                        } else {
+                            vassert(
+                              src < inflight_write->src,
+                              "src pointer is not incrementing");
+
+                            size_t src_diff = inflight_write->src - src;
+
+                            vassert(
+                              src_diff % h->alignment() == 0,
+                              "pointer isn't incrementing on alignment "
+                              "boundaries");
+                            vassert(
+                              current_expected
+                                <= src_diff + inflight_write->expected,
+                              "expected offset should be increasing");
+
+                            current_expected = inflight_write->expected
+                                               + src_diff;
+                            current_full = inflight_write->full;
+                        }
+
+                        if (inflight_write != w) {
+                            // Let maybe_advance_stable_offset know that we've
+                            // written this inflight write so it can update the
+                            // commited offset accordingly.
+                            inflight_write->done = true;
+
+                            coalesced_writes += 1;
+                            if (coalesced_writes % 1000 == 0) {
+                                vlog(
+                                  stlog.info,
+                                  "coalesced {} writes",
+                                  coalesced_writes);
+                            }
+                        }
+                    }
+                }
+
                 return _out
-                  .dma_write(start_offset, src, expected, _opts.priority)
-                  .then([this, h, w, expected, full](size_t got) {
-                      /*
-                       * the continuation that captured full=true is the end of
-                       * the dependency chain for this chunk. it can be returned
-                       * to cache.
-                       */
-                      if (full) {
-                          h->reset();
-                          internal::chunks().add(h);
-                      }
-                      if (unlikely(expected != got)) {
-                          return size_missmatch_error(
-                            "chunk::write", expected, got);
-                      }
-                      return maybe_advance_stable_offset(w);
-                  })
+                  .dma_write(
+                    start_offset, src, current_expected, _opts.priority)
+                  .then(
+                    [this, h, w, current_expected, current_full](size_t got) {
+                        /*
+                         * the continuation that captured full=true is the end
+                         * of the dependency chain for this chunk. it can be
+                         * returned to cache.
+                         */
+                        if (current_full) {
+                            h->reset();
+                            internal::chunks().add(h);
+                        }
+                        if (unlikely(current_expected != got)) {
+                            return size_missmatch_error(
+                              "chunk::write", current_expected, got);
+                        }
+                        return maybe_advance_stable_offset(w);
+                    })
                   .finally([u = std::move(u)] {});
             })
             .finally([prev] {});
