@@ -440,6 +440,20 @@ ss::future<> segment_appender::process_flush_ops(size_t committed) {
 
     _flush_ops.pop_back_n(std::distance(flushable, _flush_ops.end()));
 
+#ifdef DONTFLUSH
+    --_inflight_dispatched;
+    _flushed_offset = committed;
+    /*
+     * TODO: as an optimization, add a little house keeping to determine if
+     * eligible flush operations showed up while flush() was completing.
+     */
+    for (auto& op : ops) {
+        op.p.set_value();
+    }
+    
+    return ss::now();
+#endif
+
     return _out.flush().then([this, committed, ops = std::move(ops)]() mutable {
         // Inflight_dispatched is incremented right before a write is dispatched
         // and then must be decremented when the write is "finished", where we

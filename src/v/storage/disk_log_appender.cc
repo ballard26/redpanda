@@ -159,6 +159,12 @@ ss::future<append_result> disk_log_appender::end_of_stream() {
       .last_offset = _last_offset,
       .byte_size = _byte_size,
       .last_term = _last_term};
+
+#ifdef PCW
+    release_lock();
+    return ss::make_ready_future<append_result>(retval);
+#endif
+
     if (_config.should_fsync == storage::log_append_config::fsync::no) {
         return ss::make_ready_future<append_result>(retval);
     }

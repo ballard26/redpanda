@@ -2488,6 +2488,12 @@ ss::future<> consensus::flush_log() {
     _probe->log_flushed();
     _has_pending_flushes = false;
     auto flushed_up_to = _log->offsets().dirty_offset;
+
+#ifdef PCW
+    _flushed_offset = std::max(flushed_up_to, _flushed_offset);
+    return ss::now();
+#endif
+
     return _log->flush().then([this, flushed_up_to] {
         auto lstats = _log->offsets();
         /**
