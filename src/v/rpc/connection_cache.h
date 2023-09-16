@@ -170,6 +170,8 @@ inline ss::shard_id connection_cache::shard_for(
   ss::shard_id src_shard,
   model::node_id n,
   ss::shard_id total_shards) {
+    return (n + self) % total_shards;
+
     if (ss::smp::count <= 8) {
         return src_shard;
     }
