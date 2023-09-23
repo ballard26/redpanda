@@ -92,12 +92,40 @@ class CloudTierName(Enum):
         return list(map(lambda c: c.value, cls))
 
 
+class MachineTypeName(Enum):
+    DOCKER = 'docker'
+    I3EN_XLARGE = 'i3en.xlarge'
+    I3EN_2XLARGE = 'i3en.2xlarge'
+    I3EN_3XLARGE = 'i3en.3xlarge'
+    N2_STANDARD_4 = 'n2-standard-4'
+    N2_STANDARD_8 = 'n2-standard-8'
+
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.value, cls))
+
+
+class MachineTypeConfig:
+    def __init__(self, num_shards: int):
+        self.num_shards = num_shards
+
+
+MachineTypeConfigs = {
+    MachineTypeName.DOCKER: MachineTypeConfig(num_shards=2),
+    MachineTypeName.I3EN_XLARGE: MachineTypeConfig(num_shards=3),
+    MachineTypeName.I3EN_2XLARGE: MachineTypeConfig(num_shards=7),
+    MachineTypeName.I3EN_3XLARGE: MachineTypeConfig(num_shards=11),
+    MachineTypeName.N2_STANDARD_4: MachineTypeConfig(num_shards=3),
+    MachineTypeName.N2_STANDARD_8: MachineTypeConfig(num_shards=7),
+}
+
+
 class AdvertisedTierConfig:
     def __init__(self, ingress_rate: float, egress_rate: float,
                  num_brokers: int, segment_size: int, cloud_cache_size: int,
                  partitions_min: int, partitions_max: int,
-                 connections_limit: Optional[int],
-                 memory_per_broker: int) -> None:
+                 connections_limit: Optional[int], memory_per_broker: int,
+                 machine_type: MachineTypeName) -> None:
         self.ingress_rate = int(ingress_rate)
         self.egress_rate = int(egress_rate)
         self.num_brokers = num_brokers
@@ -107,6 +135,7 @@ class AdvertisedTierConfig:
         self.partitions_max = partitions_max
         self.connections_limit = connections_limit
         self.memory_per_broker = memory_per_broker
+        self.machine_type = machine_type
 
     @property
     def partitions_upper_limit(self):
@@ -121,6 +150,10 @@ class AdvertisedTierConfig:
         the partitions across all shards evenly.
         """
         return int(self.partitions_max * 0.8)
+
+    @property
+    def machine_type_config(self) -> MachineTypeConfig:
+        return MachineTypeConfigs[self.machine_type]
 
 
 kiB = 1024
@@ -138,21 +171,22 @@ AdvertisedTierConfigs = {
     #    |        |        |   |         |          |   +- partitions_max
     #    |        |        |   |         |          |   |      +- connections_limit
     #    |        |        |   |         |          |   |      |     +- memory_per_broker
-    #    |        |        |   |         |          |   |      |     |
+    #    |        |        |   |         |          |   |      |     |       +- machine_type
+    #    |        |        |   |         |          |   |      |     |       |
     CloudTierName.AWS_1: AdvertisedTierConfig(
-         20*MiB,  60*MiB,  3,  512*MiB,  300*GiB,   20, 1000,  1500, 32*GiB
+         20*MiB,  60*MiB,  3,  512*MiB,  300*GiB,   20, 1000,  1500, 32*GiB, MachineTypeName.I3EN_XLARGE,
     ),
     CloudTierName.AWS_2: AdvertisedTierConfig(
-         50*MiB, 150*MiB,  3,  512*MiB,  500*GiB,   50, 2000,  3750, 64*GiB
+         50*MiB, 150*MiB,  3,  512*MiB,  500*GiB,   50, 2000,  3750, 64*GiB, MachineTypeName.I3EN_2XLARGE,
     ),
     CloudTierName.AWS_3: AdvertisedTierConfig(
-        100*MiB, 200*MiB,  6,  512*MiB,  500*GiB,  100, 5000,  7500, 64*GiB
+        100*MiB, 200*MiB,  6,  512*MiB,  500*GiB,  100, 5000,  7500, 64*GiB, MachineTypeName.I3EN_2XLARGE,
     ),
     CloudTierName.AWS_4: AdvertisedTierConfig(
-        200*MiB, 400*MiB,  6,    1*GiB, 1000*GiB,  100, 5000, 15000, 96*GiB
+        200*MiB, 400*MiB,  6,    1*GiB, 1000*GiB,  100, 5000, 15000, 96*GiB, MachineTypeName.I3EN_3XLARGE,
     ),
     CloudTierName.AWS_5: AdvertisedTierConfig(
-        400*MiB, 800*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB
+        400*MiB, 800*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB, MachineTypeName.I3EN_3XLARGE,
     ),
     CloudTierName.AWS_1_P5: AdvertisedTierConfig(
          20*MiB,  60*MiB,  3,  512*MiB,  300*GiB,   20, 1000,  1500, 32*GiB
@@ -197,19 +231,19 @@ AdvertisedTierConfigs = {
         1200*MiB, 2400*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB
     ),
     CloudTierName.GCP_1: AdvertisedTierConfig(
-         20*MiB,  60*MiB,  3,  512*MiB,  150*GiB,   20,  500,  1500,  16*GiB
+         20*MiB,  60*MiB,  3,  512*MiB,  150*GiB,   20,  500,  1500, 16*GiB, MachineTypeName.N2_STANDARD_4,
     ),
     CloudTierName.GCP_2: AdvertisedTierConfig(
-         50*MiB, 150*MiB,  3,  512*MiB,  300*GiB,   50, 1000,  3750, 32*GiB
+         50*MiB, 150*MiB,  3,  512*MiB,  300*GiB,   50, 1000,  3750, 32*GiB, MachineTypeName.N2_STANDARD_8,
     ),
     CloudTierName.GCP_3: AdvertisedTierConfig(
-        100*MiB, 200*MiB,  6,  512*MiB,  320*GiB,  100, 3000,  7500, 32*GiB
+        100*MiB, 200*MiB,  6,  512*MiB,  320*GiB,  100, 3000,  7500, 32*GiB, MachineTypeName.N2_STANDARD_8,
     ),
     CloudTierName.GCP_4: AdvertisedTierConfig(
-        200*MiB, 400*MiB,  9,  512*MiB,  350*GiB,  100, 5000, 15000, 32*GiB
+        200*MiB, 400*MiB,  9,  512*MiB,  350*GiB,  100, 5000, 15000, 32*GiB, MachineTypeName.N2_STANDARD_8,
     ),
     CloudTierName.GCP_5: AdvertisedTierConfig(
-        400*MiB, 600*MiB, 12,    1*GiB,  750*GiB,  100, 7500, 22500, 32*GiB
+        400*MiB, 600*MiB, 12,    1*GiB,  750*GiB,  100, 7500, 22500, 32*GiB, MachineTypeName.N2_STANDARD_8,
     ),
     CloudTierName.GCP_1_P5: AdvertisedTierConfig(
          20*MiB,  60*MiB,  3,  512*MiB,  150*GiB,   20,  500,  1500,  16*GiB
@@ -233,7 +267,7 @@ AdvertisedTierConfigs = {
         1200*MiB, 2400*MiB, 12,    1*GiB,  750*GiB,  100, 7500, 22500, 32*GiB
     ),
     CloudTierName.DOCKER: AdvertisedTierConfig(
-        3*MiB,   9*MiB,   3,   128*MiB,  20*GiB,   1,   25,   100,   2*GiB
+        3*MiB,   9*MiB,   3,   128*MiB,  20*GiB,   1,   25,   100,   2*GiB, MachineTypeName.DOCKER,
     ),
 }
 # yapf: enable
