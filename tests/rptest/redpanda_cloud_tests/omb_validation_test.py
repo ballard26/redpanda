@@ -24,6 +24,9 @@ from rptest.services.openmessaging_benchmark_configs import \
 KiB = 1024
 MiB = KiB * KiB
 GiB = KiB * MiB
+KB = 10**3
+MB = 10**6
+GB = 10**9
 minutes = 60
 hours = 60 * minutes
 
@@ -82,6 +85,17 @@ class OMBValidationTest(RedpandaTest):
 
         self.rpk = RpkTool(self.redpanda)
 
+        self.base_validator = {
+            OMBSampleConfigurations.E2E_LATENCY_50PCT:
+            [OMBSampleConfigurations.lte(20)],
+            OMBSampleConfigurations.E2E_LATENCY_75PCT:
+            [OMBSampleConfigurations.lte(25)],
+            OMBSampleConfigurations.E2E_LATENCY_99PCT:
+            [OMBSampleConfigurations.lte(50)],
+            OMBSampleConfigurations.E2E_LATENCY_999PCT:
+            [OMBSampleConfigurations.lte(100)],
+        }
+
     def _partition_count(self) -> int:
         tier_config = self.redpanda.advertised_tier_config
         machine_config = tier_config.machine_type_config
@@ -92,6 +106,9 @@ class OMBValidationTest(RedpandaTest):
 
     def _consumer_count(self, egress_rate) -> int:
         return max(egress_rate // (4 * MiB), 8)
+
+    def _mb_to_mib(self, mb):
+        return math.floor(0.9537 * mb)
 
     @cluster(num_nodes=12)
     def test_max_connections(self):
@@ -140,13 +157,18 @@ class OMBValidationTest(RedpandaTest):
                 "acks": "all",
                 "linger.ms": 1,
                 "max.in.flight.requests.per.connection": 5,
-                "batch.size": 131072,
             },
             "consumer_config": {
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": "false",
-                "max.partition.fetch.bytes": 131072
             },
+        }
+
+        validator = self.base_validator | {
+            OMBSampleConfigurations.AVG_THROUGHPUT_MBPS: [
+                OMBSampleConfigurations.gte(
+                    self._mb_to_mib(producer_rate // (1 * MB))),
+            ],
         }
 
         # ProducerSwarm parameters
@@ -183,13 +205,11 @@ class OMBValidationTest(RedpandaTest):
         producer_kwargs[
             'messages_per_second_per_producer'] = messages_per_sec_per_producer
 
-        benchmark = OpenMessagingBenchmark(
-            self._ctx,
-            self.redpanda,
-            driver,
-            (workload, OMBSampleConfigurations.UNIT_TEST_LATENCY_VALIDATOR),
-            num_workers=OMB_WORKERS,
-            topology="ensemble")
+        benchmark = OpenMessagingBenchmark(self._ctx,
+                                           self.redpanda,
+                                           driver, (workload, validator),
+                                           num_workers=OMB_WORKERS,
+                                           topology="ensemble")
 
         # Create topic for swarm workers after OMB to avoid the reset
         swarm_topic_name = "swarm_topic"
@@ -267,11 +287,18 @@ class OMBValidationTest(RedpandaTest):
             "warmup_duration_minutes": 1,
         }
 
+        validator = self.base_validator | {
+            OMBSampleConfigurations.AVG_THROUGHPUT_MBPS: [
+                OMBSampleConfigurations.gte(
+                    self._mb_to_mib(producer_rate // (1 * MB))),
+            ],
+        }
+
         benchmark = OpenMessagingBenchmark(
             self._ctx,
             self.redpanda,
             "ACK_ALL_GROUP_LINGER_1MS_IDEM_MAX_IN_FLIGHT",
-            (workload, OMBSampleConfigurations.UNIT_TEST_LATENCY_VALIDATOR),
+            (workload, validator),
             num_workers=10,
             topology="ensemble")
         benchmark.start()
@@ -288,6 +315,12 @@ class OMBValidationTest(RedpandaTest):
         partitions = self._partition_count()
         total_producers = self._producer_count(tier_config.ingress_rate)
         total_consumers = self._consumer_count(tier_config.egress_rate)
+        validator = self.base_validator | {
+            OMBSampleConfigurations.AVG_THROUGHPUT_MBPS: [
+                OMBSampleConfigurations.gte(
+                    self._mb_to_mib(tier_config.ingress_rate // (1 * MB))),
+            ],
+        }
 
         workload = {
             "name": "CommonTestWorkload",
@@ -315,22 +348,18 @@ class OMBValidationTest(RedpandaTest):
                 "acks": "all",
                 "linger.ms": 1,
                 "max.in.flight.requests.per.connection": 5,
-                "batch.size": 131072,
             },
             "consumer_config": {
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": "false",
-                "max.partition.fetch.bytes": 131072
             },
         }
 
-        benchmark = OpenMessagingBenchmark(
-            self._ctx,
-            self.redpanda,
-            driver,
-            (workload, OMBSampleConfigurations.UNIT_TEST_LATENCY_VALIDATOR),
-            num_workers=10,
-            topology="ensemble")
+        benchmark = OpenMessagingBenchmark(self._ctx,
+                                           self.redpanda,
+                                           driver, (workload, validator),
+                                           num_workers=10,
+                                           topology="ensemble")
         benchmark.start()
         benchmark_time_min = benchmark.benchmark_time() + 5
         benchmark.wait(timeout_sec=benchmark_time_min * 60)
@@ -377,12 +406,10 @@ class OMBValidationTest(RedpandaTest):
                 "acks": "all",
                 "linger.ms": 1,
                 "max.in.flight.requests.per.connection": 5,
-                "batch.size": 131072,
             },
             "consumer_config": {
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": "false",
-                "max.partition.fetch.bytes": 131072
             },
             "topic_config": {
                 "retention.bytes": retention_bytes,
@@ -391,13 +418,18 @@ class OMBValidationTest(RedpandaTest):
             },
         }
 
-        benchmark = OpenMessagingBenchmark(
-            self._ctx,
-            self.redpanda,
-            driver,
-            (workload, OMBSampleConfigurations.UNIT_TEST_LATENCY_VALIDATOR),
-            num_workers=10,
-            topology="ensemble")
+        validator = self.base_validator | {
+            OMBSampleConfigurations.AVG_THROUGHPUT_MBPS: [
+                OMBSampleConfigurations.gte(
+                    self._mb_to_mib(producer_rate // (1 * MB))),
+            ],
+        }
+
+        benchmark = OpenMessagingBenchmark(self._ctx,
+                                           self.redpanda,
+                                           driver, (workload, validator),
+                                           num_workers=10,
+                                           topology="ensemble")
         benchmark.start()
         benchmark_time_min = benchmark.benchmark_time() + 5
         benchmark.wait(timeout_sec=benchmark_time_min * 60)

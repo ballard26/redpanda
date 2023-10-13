@@ -87,6 +87,13 @@ class CloudTierName(Enum):
     GCP_6_P5 = 'tco-p5-tier-6-gcp'
     GCP_7_P5 = 'tco-p5-tier-7-gcp'
 
+    AWS_1_TCO_P5 = 'tco-p5-tier-1-aws'
+    AWS_2_TCO_P5 = 'tco-p5-tier-2-aws'
+    AWS_3_TCO_P5 = 'tco-p5-tier-3-aws'
+    GCP_1_TCO_P5 = 'tco-p5-tier-1-gcp'
+    GCP_2_TCO_P5 = 'tco-p5-tier-2-gcp'
+    GCP_3_TCO_P5 = 'tco-p5-tier-3-gcp'
+
     @classmethod
     def list(cls):
         return list(map(lambda c: c.value, cls))
@@ -94,11 +101,14 @@ class CloudTierName(Enum):
 
 class MachineTypeName(Enum):
     DOCKER = 'docker'
+    I3EN_LARGE = 'i3en.large'
     I3EN_XLARGE = 'i3en.xlarge'
     I3EN_2XLARGE = 'i3en.2xlarge'
     I3EN_3XLARGE = 'i3en.3xlarge'
     N2_STANDARD_4 = 'n2-standard-4'
     N2_STANDARD_8 = 'n2-standard-8'
+    N2D_STANDARD_2 = 'n2d-standard-2'
+    N2D_STANDARD_4 = 'n2d-standard-4'
 
     @classmethod
     def list(cls):
@@ -112,11 +122,14 @@ class MachineTypeConfig:
 
 MachineTypeConfigs = {
     MachineTypeName.DOCKER: MachineTypeConfig(num_shards=2),
+    MachineTypeName.I3EN_LARGE: MachineTypeConfig(num_shards=1),
     MachineTypeName.I3EN_XLARGE: MachineTypeConfig(num_shards=3),
     MachineTypeName.I3EN_2XLARGE: MachineTypeConfig(num_shards=7),
     MachineTypeName.I3EN_3XLARGE: MachineTypeConfig(num_shards=11),
     MachineTypeName.N2_STANDARD_4: MachineTypeConfig(num_shards=3),
     MachineTypeName.N2_STANDARD_8: MachineTypeConfig(num_shards=7),
+    MachineTypeName.N2D_STANDARD_2: MachineTypeConfig(num_shards=1),
+    MachineTypeName.N2D_STANDARD_4: MachineTypeConfig(num_shards=3),
 }
 
 
@@ -159,6 +172,10 @@ class AdvertisedTierConfig:
 kiB = 1024
 MiB = kiB * kiB
 GiB = MiB * kiB
+
+KB = 10**3
+MB = 10**6
+GB = 10**9
 
 # yapf: disable
 AdvertisedTierConfigs = {
@@ -268,6 +285,25 @@ AdvertisedTierConfigs = {
     ),
     CloudTierName.DOCKER: AdvertisedTierConfig(
         3*MiB,   9*MiB,   3,   128*MiB,  20*GiB,   1,   25,   100,   2*GiB, MachineTypeName.DOCKER,
+    ),
+    # TCO
+    CloudTierName.AWS_1_TCO_P5: AdvertisedTierConfig(
+        25*MB,   60*MB,   3,   128*MB,   125*GB,  20, 1000,  1500,  16*GiB, MachineTypeName.I3EN_LARGE,
+    ),
+    CloudTierName.AWS_2_TCO_P5: AdvertisedTierConfig(
+        50*MB,   150*MB,  3,   128*MB,   250*GB,  50, 3000,  3750,  32*GiB, MachineTypeName.I3EN_XLARGE,
+    ),
+    CloudTierName.AWS_3_TCO_P5: AdvertisedTierConfig(
+        100*MB,  200*MB,  6,   128*MB,   250*GB, 100, 6000,  7500,  32*GiB, MachineTypeName.I3EN_XLARGE,
+    ),
+    CloudTierName.GCP_1_TCO_P5: AdvertisedTierConfig(
+        25*MB,   60*MB,   3,   128*MB,   125*GB,  20, 1000,  1500,  8*GiB, MachineTypeName.N2D_STANDARD_2,
+    ),
+    CloudTierName.GCP_2_TCO_P5: AdvertisedTierConfig(
+        50*MB,   150*MB,  3,   128*MB,   250*GB,  50, 2800,  3750,  16*GiB, MachineTypeName.N2D_STANDARD_4,
+    ),
+    CloudTierName.GCP_3_TCO_P5: AdvertisedTierConfig(
+        100*MB,  200*MB,  6,   128*MB,   250*GB, 100, 5600,  7500,  16*GiB, MachineTypeName.N2D_STANDARD_4,
     ),
 }
 # yapf: enable
