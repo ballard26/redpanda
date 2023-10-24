@@ -185,7 +185,7 @@ class OMBValidationTest(RedpandaTest):
         conn_limit = tier_config.connections_limit - 3 * (total_producers +
                                                           total_consumers)
         _target_per_node = conn_limit // SWARM_WORKERS
-        _conn_per_node = int(_target_per_node * 0.8)
+        _conn_per_node = int(_target_per_node * 0.7)
 
         msg_rate_per_node = (1 * KiB) // effective_msg_size
         messages_per_sec_per_producer = max(
@@ -193,7 +193,8 @@ class OMBValidationTest(RedpandaTest):
 
         # single producer runtime
         # Roughly every 500 connection needs 60 seconds to ramp up
-        warm_up_time_s = max(60 * math.ceil(_target_per_node / 500), 60)
+        time_per_500_s = 120
+        warm_up_time_s = max(time_per_500_s * math.ceil(_target_per_node / 500), time_per_500_s)
         target_runtime_s = 60 * (test_duration +
                                  warmup_duration) + warm_up_time_s
         records_per_producer = messages_per_sec_per_producer * target_runtime_s
