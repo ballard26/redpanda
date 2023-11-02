@@ -90,6 +90,8 @@ class CloudTierName(Enum):
     AWS_1_TCO_P5 = 'tco-p5-tier-1-aws'
     AWS_2_TCO_P5 = 'tco-p5-tier-2-aws'
     AWS_3_TCO_P5 = 'tco-p5-tier-3-aws'
+    AWS_4_TCO_P5 = 'tco-p5-tier-4-aws'
+    AWS_5_TCO_P5 = 'tco-p5-tier-5-aws'
     GCP_1_TCO_P5 = 'tco-p5-tier-1-gcp'
     GCP_2_TCO_P5 = 'tco-p5-tier-2-gcp'
     GCP_3_TCO_P5 = 'tco-p5-tier-3-gcp'
@@ -105,6 +107,7 @@ class MachineTypeName(Enum):
     I3EN_XLARGE = 'i3en.xlarge'
     I3EN_2XLARGE = 'i3en.2xlarge'
     I3EN_3XLARGE = 'i3en.3xlarge'
+    I3EN_6XLARGE = 'i3en.6xlarge'
     N2_STANDARD_4 = 'n2-standard-4'
     N2_STANDARD_8 = 'n2-standard-8'
     N2D_STANDARD_2 = 'n2d-standard-2'
@@ -126,6 +129,7 @@ MachineTypeConfigs = {
     MachineTypeName.I3EN_XLARGE: MachineTypeConfig(num_shards=3),
     MachineTypeName.I3EN_2XLARGE: MachineTypeConfig(num_shards=7),
     MachineTypeName.I3EN_3XLARGE: MachineTypeConfig(num_shards=11),
+    MachineTypeName.I3EN_6XLARGE: MachineTypeConfig(num_shards=23),
     MachineTypeName.N2_STANDARD_4: MachineTypeConfig(num_shards=3),
     MachineTypeName.N2_STANDARD_8: MachineTypeConfig(num_shards=7),
     MachineTypeName.N2D_STANDARD_2: MachineTypeConfig(num_shards=1),
@@ -205,48 +209,6 @@ AdvertisedTierConfigs = {
     CloudTierName.AWS_5: AdvertisedTierConfig(
         400*MiB, 800*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB, MachineTypeName.I3EN_3XLARGE,
     ),
-    CloudTierName.AWS_1_P5: AdvertisedTierConfig(
-         20*MiB,  60*MiB,  3,  512*MiB,  300*GiB,   20, 1000,  1500, 32*GiB
-    ),
-    CloudTierName.AWS_2_P5: AdvertisedTierConfig(
-         50*MiB, 150*MiB,  3,  512*MiB,  500*GiB,   50, 2000,  3750, 64*GiB
-    ),
-    CloudTierName.AWS_3_P5: AdvertisedTierConfig(
-        100*MiB, 200*MiB,  6,  512*MiB,  500*GiB,  100, 5000,  7500, 64*GiB
-    ),
-    CloudTierName.AWS_4_P5: AdvertisedTierConfig(
-        200*MiB, 400*MiB,  6,    1*GiB, 1000*GiB,  100, 5000, 15000, 96*GiB
-    ),
-    CloudTierName.AWS_5_P5: AdvertisedTierConfig(
-        400*MiB, 800*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB
-    ),
-    CloudTierName.AWS_6_P5: AdvertisedTierConfig(
-        800*MiB, 1600*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB
-    ),
-    CloudTierName.AWS_7_P5: AdvertisedTierConfig(
-        1200*MiB, 2400*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB
-    ),
-    CloudTierName.AWS_1_P5_ARM: AdvertisedTierConfig(
-         20*MiB,  60*MiB,  3,  512*MiB,  300*GiB,   20, 1000,  1500, 32*GiB
-    ),
-    CloudTierName.AWS_2_P5_ARM: AdvertisedTierConfig(
-         50*MiB, 150*MiB,  3,  512*MiB,  500*GiB,   50, 2000,  3750, 64*GiB
-    ),
-    CloudTierName.AWS_3_P5_ARM: AdvertisedTierConfig(
-        100*MiB, 200*MiB,  6,  512*MiB,  500*GiB,  100, 5000,  7500, 64*GiB
-    ),
-    CloudTierName.AWS_4_P5_ARM: AdvertisedTierConfig(
-        200*MiB, 400*MiB,  6,    1*GiB, 1000*GiB,  100, 5000, 15000, 96*GiB
-    ),
-    CloudTierName.AWS_5_P5_ARM: AdvertisedTierConfig(
-        400*MiB, 800*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB
-    ),
-    CloudTierName.AWS_6_P5_ARM: AdvertisedTierConfig(
-        800*MiB, 1600*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB
-    ),
-    CloudTierName.AWS_7_P5_ARM: AdvertisedTierConfig(
-        1200*MiB, 2400*MiB,  9,    1*GiB, 1000*GiB,  150, 7500, 30000, 96*GiB
-    ),
     CloudTierName.GCP_1: AdvertisedTierConfig(
          20*MiB,  60*MiB,  3,  512*MiB,  150*GiB,   20,  500,  1500, 16*GiB, MachineTypeName.N2_STANDARD_4,
     ),
@@ -262,33 +224,12 @@ AdvertisedTierConfigs = {
     CloudTierName.GCP_5: AdvertisedTierConfig(
         400*MiB, 600*MiB, 12,    1*GiB,  750*GiB,  100, 7500, 22500, 32*GiB, MachineTypeName.N2_STANDARD_8,
     ),
-    CloudTierName.GCP_1_P5: AdvertisedTierConfig(
-         20*MiB,  60*MiB,  3,  512*MiB,  150*GiB,   20,  500,  1500,  16*GiB
-    ),
-    CloudTierName.GCP_2_P5: AdvertisedTierConfig(
-         50*MiB, 150*MiB,  3,  512*MiB,  300*GiB,   50, 1000,  3750, 32*GiB
-    ),
-    CloudTierName.GCP_3_P5: AdvertisedTierConfig(
-        100*MiB, 200*MiB,  6,  512*MiB,  320*GiB,  100, 3000,  7500, 32*GiB
-    ),
-    CloudTierName.GCP_4_P5: AdvertisedTierConfig(
-        200*MiB, 400*MiB,  9,  512*MiB,  350*GiB,  100, 5000, 15000, 32*GiB
-    ),
-    CloudTierName.GCP_5_P5: AdvertisedTierConfig(
-        400*MiB, 600*MiB, 12,    1*GiB,  750*GiB,  100, 7500, 22500, 32*GiB
-    ),
-    CloudTierName.GCP_6_P5: AdvertisedTierConfig(
-        800*MiB, 1600*MiB, 12,    1*GiB,  750*GiB,  100, 7500, 22500, 32*GiB
-    ),
-    CloudTierName.GCP_7_P5: AdvertisedTierConfig(
-        1200*MiB, 2400*MiB, 12,    1*GiB,  750*GiB,  100, 7500, 22500, 32*GiB
-    ),
     CloudTierName.DOCKER: AdvertisedTierConfig(
         3*MiB,   9*MiB,   3,   128*MiB,  20*GiB,   1,   25,   100,   2*GiB, MachineTypeName.DOCKER,
     ),
     # TCO
     CloudTierName.AWS_1_TCO_P5: AdvertisedTierConfig(
-        25*MB,   60*MB,   3,   128*MB,   125*GB,  20, 1000,  1500,  16*GiB, MachineTypeName.I3EN_LARGE,
+        20*MB,   60*MB,   3,   128*MB,   125*GB,  20, 1000,  1500,  16*GiB, MachineTypeName.I3EN_LARGE,
     ),
     CloudTierName.AWS_2_TCO_P5: AdvertisedTierConfig(
         50*MB,   150*MB,  3,   128*MB,   250*GB,  50, 3000,  3750,  32*GiB, MachineTypeName.I3EN_XLARGE,
@@ -296,8 +237,15 @@ AdvertisedTierConfigs = {
     CloudTierName.AWS_3_TCO_P5: AdvertisedTierConfig(
         100*MB,  200*MB,  6,   128*MB,   250*GB, 100, 6000,  7500,  32*GiB, MachineTypeName.I3EN_XLARGE,
     ),
+    CloudTierName.AWS_4_TCO_P5: AdvertisedTierConfig(
+        200*MB,  400*MB,  12,  128*MB,  250*GB, 150, 12000, 15000,  32*GiB, MachineTypeName.I3EN_XLARGE,
+    ),
+    CloudTierName.AWS_5_TCO_P5: AdvertisedTierConfig(
+        400*MB,  800*MB,  3,   128*MB,2_000*GB, 200, 23000, 30000,  192*GiB, MachineTypeName.I3EN_6XLARGE,
+    ),
+
     CloudTierName.GCP_1_TCO_P5: AdvertisedTierConfig(
-        25*MB,   60*MB,   3,   128*MB,   125*GB,  20, 1000,  1500,  8*GiB, MachineTypeName.N2D_STANDARD_2,
+        20*MB,   60*MB,   3,   128*MB,   125*GB,  20, 1000,  1500,  8*GiB, MachineTypeName.N2D_STANDARD_2,
     ),
     CloudTierName.GCP_2_TCO_P5: AdvertisedTierConfig(
         50*MB,   150*MB,  3,   128*MB,   250*GB,  50, 2800,  3750,  16*GiB, MachineTypeName.N2D_STANDARD_4,

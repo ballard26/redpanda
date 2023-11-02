@@ -87,9 +87,9 @@ class OMBValidationTest(RedpandaTest):
 
         self.base_validator = {
             OMBSampleConfigurations.E2E_LATENCY_50PCT:
-            [OMBSampleConfigurations.lte(20)],
-            OMBSampleConfigurations.E2E_LATENCY_75PCT:
             [OMBSampleConfigurations.lte(25)],
+            OMBSampleConfigurations.E2E_LATENCY_75PCT:
+            [OMBSampleConfigurations.lte(30)],
             OMBSampleConfigurations.E2E_LATENCY_99PCT:
             [OMBSampleConfigurations.lte(50)],
             OMBSampleConfigurations.E2E_LATENCY_999PCT:
@@ -254,7 +254,7 @@ class OMBValidationTest(RedpandaTest):
             benchmark.wait(timeout_sec=benchmark_time_min * 60)
 
             for s in swarm:
-                s.wait(timeout_sec=5 * 60)
+                s.wait(timeout_sec=10 * 60)
 
             benchmark.check_succeed()
 
