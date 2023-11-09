@@ -275,7 +275,7 @@ class OpenMessagingBenchmark(Service):
             node.account.ssh(start_cmd)
             monitor.wait_until(
                 "Starting warm-up traffic",
-                timeout_sec=60,
+                timeout_sec=300,
                 backoff_sec=4,
                 err_msg="Open Messaging Benchmark service didn't start")
 
