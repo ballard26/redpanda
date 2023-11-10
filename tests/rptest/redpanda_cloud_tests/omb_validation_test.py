@@ -49,7 +49,7 @@ class OMBValidationTest(RedpandaTest):
         "payload_file": "payload/payload-1Kb.data",
         "consumer_backlog_size_GB": 0,
         "test_duration_minutes": 5,
-        "warmup_duration_minutes": 1,
+        "warmup_duration_minutes": 5,
     }
 
     def __init__(self, test_ctx: TestContext, *args, **kwargs):
