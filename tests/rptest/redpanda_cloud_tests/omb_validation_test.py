@@ -41,6 +41,17 @@ def get_globals_value(globals, key_name, default=None):
 
 
 class OMBValidationTest(RedpandaTest):
+
+    # common workload details shared among most/all test methods
+    WORKLOAD_DEFAULTS = {
+        "topics": 1,
+        "message_size": 1 * KiB,
+        "payload_file": "payload/payload-1Kb.data",
+        "consumer_backlog_size_GB": 0,
+        "test_duration_minutes": 5,
+        "warmup_duration_minutes": 1,
+    }
+
     def __init__(self, test_ctx: TestContext, *args, **kwargs):
         self._ctx = test_ctx
         # Get tier value
@@ -136,18 +147,14 @@ class OMBValidationTest(RedpandaTest):
         warmup_duration = 1  # minutes
         test_duration = 5  # minutes
 
-        workload = {
+        workload = self.WORKLOAD_DEFAULTS | {
             "name": "MaxConnectionsTestWorkload",
-            "topics": 1,
             "partitions_per_topic": self._partition_count(),
             "subscriptions_per_topic": subscriptions,
             "consumer_per_subscription": max(total_consumers // subscriptions,
                                              1),
             "producers_per_topic": total_producers,
             "producer_rate": producer_rate // (1 * KiB),
-            "message_size": 1 * KiB,
-            "payload_file": "payload/payload-1Kb.data",
-            "consumer_backlog_size_GB": 0,
             "test_duration_minutes": test_duration,
             "warmup_duration_minutes": warmup_duration,
         }
@@ -277,20 +284,14 @@ class OMBValidationTest(RedpandaTest):
         total_producers = self._producer_count(producer_rate)
         total_consumers = self._consumer_count(producer_rate * subscriptions)
 
-        workload = {
+        workload = self.WORKLOAD_DEFAULTS | {
             "name": "MaxPartitionsTestWorkload",
-            "topics": 1,
             "partitions_per_topic": partitions_per_topic,
             "subscriptions_per_topic": subscriptions,
             "consumer_per_subscription": max(total_consumers // subscriptions,
                                              1),
             "producers_per_topic": total_producers,
             "producer_rate": producer_rate / (1 * KiB),
-            "message_size": 1 * KiB,
-            "payload_file": "payload/payload-1Kb.data",
-            "consumer_backlog_size_GB": 0,
-            "test_duration_minutes": 5,
-            "warmup_duration_minutes": 1,
         }
 
         validator = self.base_validator | {
@@ -328,20 +329,14 @@ class OMBValidationTest(RedpandaTest):
             ],
         }
 
-        workload = {
+        workload = self.WORKLOAD_DEFAULTS | {
             "name": "CommonTestWorkload",
-            "topics": 1,
             "partitions_per_topic": partitions,
             "subscriptions_per_topic": subscriptions,
             "consumer_per_subscription": max(total_consumers // subscriptions,
                                              1),
             "producers_per_topic": total_producers,
             "producer_rate": tier_config.ingress_rate // (1 * KiB),
-            "message_size": 1 * KiB,
-            "payload_file": "payload/payload-1Kb.data",
-            "consumer_backlog_size_GB": 0,
-            "test_duration_minutes": 5,
-            "warmup_duration_minutes": 1,
         }
 
         driver = {
@@ -387,20 +382,15 @@ class OMBValidationTest(RedpandaTest):
         total_producers = 10
         total_consumers = 10
 
-        workload = {
+        workload = self.WORKLOAD_DEFAULTS | {
             "name": "RetentionTestWorkload",
-            "topics": 1,
             "partitions_per_topic": partitions,
             "subscriptions_per_topic": subscriptions,
             "consumer_per_subscription": max(total_consumers // subscriptions,
                                              1),
             "producers_per_topic": total_producers,
             "producer_rate": producer_rate // (1 * KiB),
-            "message_size": 1 * KiB,
-            "payload_file": "payload/payload-1Kb.data",
-            "consumer_backlog_size_GB": 0,
             "test_duration_minutes": test_duration_seconds // 60,
-            "warmup_duration_minutes": 1,
         }
 
         driver = {
