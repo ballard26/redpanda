@@ -41,17 +41,6 @@ def get_globals_value(globals, key_name, default=None):
 
 
 class OMBValidationTest(RedpandaTest):
-
-    # common workload details shared among most/all test methods
-    WORKLOAD_DEFAULTS = {
-        "topics": 1,
-        "message_size": 1 * KiB,
-        "payload_file": "payload/payload-1Kb.data",
-        "consumer_backlog_size_GB": 0,
-        "test_duration_minutes": 5,
-        "warmup_duration_minutes": 5,
-    }
-
     def __init__(self, test_ctx: TestContext, *args, **kwargs):
         self._ctx = test_ctx
         # Get tier value
@@ -113,14 +102,10 @@ class OMBValidationTest(RedpandaTest):
         return 5 * tier_config.num_brokers * machine_config.num_shards
 
     def _producer_count(self, ingress_rate) -> int:
-        """Determine the number of producers based on the ingress rate.
-        We assume that each producer is capable of 5 MB/s."""
-        return max(ingress_rate // (5 * MB), 1)
+        return max(ingress_rate // (4 * MiB), 8)
 
     def _consumer_count(self, egress_rate) -> int:
-        """Determine the number of consumers based on the egress rate.
-        We assume that each consumer is capable of 5 MB/s."""
-        return max(egress_rate // (5 * MB), 1)
+        return max(egress_rate // (4 * MiB), 8)
 
     def _mb_to_mib(self, mb):
         return math.floor(0.9537 * mb)
@@ -147,14 +132,18 @@ class OMBValidationTest(RedpandaTest):
         warmup_duration = 1  # minutes
         test_duration = 5  # minutes
 
-        workload = self.WORKLOAD_DEFAULTS | {
+        workload = {
             "name": "MaxConnectionsTestWorkload",
+            "topics": 1,
             "partitions_per_topic": self._partition_count(),
             "subscriptions_per_topic": subscriptions,
             "consumer_per_subscription": max(total_consumers // subscriptions,
                                              1),
             "producers_per_topic": total_producers,
             "producer_rate": producer_rate // (1 * KiB),
+            "message_size": 1 * KiB,
+            "payload_file": "payload/payload-1Kb.data",
+            "consumer_backlog_size_GB": 0,
             "test_duration_minutes": test_duration,
             "warmup_duration_minutes": warmup_duration,
         }
@@ -205,8 +194,7 @@ class OMBValidationTest(RedpandaTest):
         # single producer runtime
         # Roughly every 500 connection needs 60 seconds to ramp up
         time_per_500_s = 120
-        warm_up_time_s = max(
-            time_per_500_s * math.ceil(_target_per_node / 500), time_per_500_s)
+        warm_up_time_s = max(time_per_500_s * math.ceil(_target_per_node / 500), time_per_500_s)
         target_runtime_s = 60 * (test_duration +
                                  warmup_duration) + warm_up_time_s
         records_per_producer = messages_per_sec_per_producer * target_runtime_s
@@ -284,14 +272,20 @@ class OMBValidationTest(RedpandaTest):
         total_producers = self._producer_count(producer_rate)
         total_consumers = self._consumer_count(producer_rate * subscriptions)
 
-        workload = self.WORKLOAD_DEFAULTS | {
+        workload = {
             "name": "MaxPartitionsTestWorkload",
+            "topics": 1,
             "partitions_per_topic": partitions_per_topic,
             "subscriptions_per_topic": subscriptions,
             "consumer_per_subscription": max(total_consumers // subscriptions,
                                              1),
             "producers_per_topic": total_producers,
             "producer_rate": producer_rate / (1 * KiB),
+            "message_size": 1 * KiB,
+            "payload_file": "payload/payload-1Kb.data",
+            "consumer_backlog_size_GB": 0,
+            "test_duration_minutes": 5,
+            "warmup_duration_minutes": 1,
         }
 
         validator = self.base_validator | {
@@ -329,14 +323,20 @@ class OMBValidationTest(RedpandaTest):
             ],
         }
 
-        workload = self.WORKLOAD_DEFAULTS | {
+        workload = {
             "name": "CommonTestWorkload",
+            "topics": 1,
             "partitions_per_topic": partitions,
             "subscriptions_per_topic": subscriptions,
             "consumer_per_subscription": max(total_consumers // subscriptions,
                                              1),
             "producers_per_topic": total_producers,
             "producer_rate": tier_config.ingress_rate // (1 * KiB),
+            "message_size": 1 * KiB,
+            "payload_file": "payload/payload-1Kb.data",
+            "consumer_backlog_size_GB": 0,
+            "test_duration_minutes": 5,
+            "warmup_duration_minutes": 1,
         }
 
         driver = {
@@ -382,15 +382,20 @@ class OMBValidationTest(RedpandaTest):
         total_producers = 10
         total_consumers = 10
 
-        workload = self.WORKLOAD_DEFAULTS | {
+        workload = {
             "name": "RetentionTestWorkload",
+            "topics": 1,
             "partitions_per_topic": partitions,
             "subscriptions_per_topic": subscriptions,
             "consumer_per_subscription": max(total_consumers // subscriptions,
                                              1),
             "producers_per_topic": total_producers,
             "producer_rate": producer_rate // (1 * KiB),
+            "message_size": 1 * KiB,
+            "payload_file": "payload/payload-1Kb.data",
+            "consumer_backlog_size_GB": 0,
             "test_duration_minutes": test_duration_seconds // 60,
+            "warmup_duration_minutes": 1,
         }
 
         driver = {

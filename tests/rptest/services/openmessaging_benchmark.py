@@ -194,10 +194,6 @@ class OpenMessagingBenchmark(Service):
             self.workload = workload[0]
             self.validator = workload[1]
 
-        assert int(
-            self.workload.get("warmup_duration_minutes", '0')
-        ) >= 1, "must use non-zero warmup time as we rely on warm-up message to detect test start"
-
         self.logger.info("Using driver: %s, workload: %s", self.driver["name"],
                          self.workload["name"])
 
@@ -279,7 +275,7 @@ class OpenMessagingBenchmark(Service):
             node.account.ssh(start_cmd)
             monitor.wait_until(
                 "Starting warm-up traffic",
-                timeout_sec=300,
+                timeout_sec=60,
                 backoff_sec=4,
                 err_msg="Open Messaging Benchmark service didn't start")
 
