@@ -470,6 +470,9 @@ static partition_produce_stages produce_topic_partition(
                   m->cancel();
               }
               return p;
+          })
+          .then([](produce_response::partition p) {
+              return ss::sleep(100ms).then([p = std::move(p)] { return p; });
           });
     return partition_produce_stages{
       .dispatched = std::move(dispatch_f),
