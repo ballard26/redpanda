@@ -7,6 +7,7 @@ rp_test(
   LIBRARIES 
     v::gtest_main
     v::wasm_parser
+    v::bytes
   ARGS "-- -c 1"
   LABELS wasm_parser wasm
 )
@@ -21,6 +22,7 @@ rp_test(
     wasmtime
     v::gtest_main
     v::wasm_parser
+    v::bytes
   ARGS "-- -c 1"
   LABELS wasm_parser wasm
 )

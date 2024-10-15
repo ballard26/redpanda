@@ -1,4 +1,4 @@
 {
-    "clangd.path": "vbuild/llvm/install/bin/clangd",
+    "clangd.path": "/home/brandonallard/data/redpanda/vbuild/llvm/3b5b5c1ec4a3095ab096dd780e84d7ab81f3d7ff/install/bin/clangd",
     "clangd.compilationDatabaseCandidates": ["vbuild/debug/clang", "vbuild/release/clang"]
 }

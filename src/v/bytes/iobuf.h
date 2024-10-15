@@ -21,6 +21,7 @@
 #include "bytes/details/out_of_range.h"
 #include "container/intrusive_list_helpers.h"
 
+#include <seastar/core/shard_id.hh>
 #include <seastar/core/temporary_buffer.hh>
 
 #include <cstddef>
@@ -94,6 +95,7 @@ public:
 #ifndef NDEBUG
       , _verify_shard(x._verify_shard)
 #endif
+      , _origin_shard(x._origin_shard)
     {
         x._frags = container{};
         x._size = 0;
@@ -261,6 +263,7 @@ private:
     container _frags;
     size_t _size{0};
     expression_in_debug_mode(oncore _verify_shard);
+    seastar::shard_id _origin_shard{seastar::this_shard_id()};
     friend std::ostream& operator<<(std::ostream&, const iobuf&);
 };
 
@@ -268,7 +271,6 @@ inline void iobuf::clear() {
     _frags.clear_and_dispose(&details::dispose_io_fragment);
     _size = 0;
 }
-inline iobuf::~iobuf() noexcept { clear(); }
 inline iobuf::iterator iobuf::begin() { return _frags.begin(); }
 inline iobuf::iterator iobuf::end() { return _frags.end(); }
 inline iobuf::reverse_iterator iobuf::rbegin() { return _frags.rbegin(); }

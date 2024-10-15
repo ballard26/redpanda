@@ -105,9 +105,9 @@ iobuf make_vints(size_t count) {
     return ret;
 }
 
-using stream = ss::input_stream<char>;
+using streamt = ss::input_stream<char>;
 
-stream make_vints_stream(size_t count) {
+streamt make_vints_stream(size_t count) {
     return make_iobuf_input_stream(make_vints(count));
 }
 

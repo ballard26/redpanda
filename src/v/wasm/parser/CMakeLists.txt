@@ -4,6 +4,7 @@ v_cc_library(
     parser.cc
   DEPS
     v::bytes
+    v::utils
     v::strings
     v::container
     Seastar::seastar

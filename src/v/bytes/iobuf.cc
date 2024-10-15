@@ -11,15 +11,81 @@
 
 #include "base/vassert.h"
 #include "bytes/details/io_allocation_size.h"
+#include "bytes/log_hist.h"
+#include "metrics/metrics.h"
+#include "metrics/prometheus_sanitize.h"
 
 #include <seastar/core/bitops.hh>
 #include <seastar/core/do_with.hh>
 #include <seastar/core/future-util.hh>
+#include <seastar/core/reactor.hh>
 #include <seastar/core/smp.hh>
 
 #include <cstddef>
 #include <iostream>
 #include <limits>
+#include <optional>
+
+class iobuf_metrics {
+    using buff_log_hist = bytes::log_hist<26, 8ul>;
+
+public:
+    iobuf_metrics() {
+        namespace sm = ss::metrics;
+
+        _metrics.add_group(
+          prometheus_sanitize::metrics_name("iobuf"),
+          {
+            sm::make_histogram(
+              "num_frags_local_free",
+              [this] { return _local_free_sizes.internal_histogram_logform(); },
+              sm::description(
+                "Histogram of buffer count for iobufs free'd on local shards"),
+              {}),
+            sm::make_histogram(
+              "num_frags_foreign_free",
+              [this] {
+                  return _foreign_free_sizes.internal_histogram_logform();
+              },
+              sm::description("Histogram of buffer count for iobufs free'd on "
+                              "foreign shards"),
+              {}),
+          },
+          {},
+          {sm::shard_label});
+    }
+
+    void record_num_frags(size_t num_of_frags, bool is_foreign) {
+        if (is_foreign) {
+            _foreign_free_sizes.record(num_of_frags);
+        } else {
+            _local_free_sizes.record(num_of_frags);
+        }
+    }
+
+private:
+    metrics::internal_metric_groups _metrics;
+    buff_log_hist _foreign_free_sizes;
+    buff_log_hist _local_free_sizes;
+};
+
+inline std::optional<iobuf_metrics>& get_metrics() {
+    static thread_local std::optional<iobuf_metrics> metrics = std::nullopt;
+    if (!metrics && seastar::engine_is_ready()) {
+        metrics.emplace();
+    }
+    return metrics;
+}
+
+iobuf::~iobuf() noexcept {
+    bool is_foreign = seastar::this_shard_id() != _origin_shard;
+    auto& metrics = get_metrics();
+    if(metrics) {
+        metrics->record_num_frags(_frags.size(), is_foreign);
+    }
+
+    clear();
+}
 
 std::ostream& operator<<(std::ostream& o, const iobuf& io) {
     return o << "{bytes=" << io.size_bytes()
@@ -28,7 +94,9 @@ std::ostream& operator<<(std::ostream& o, const iobuf& io) {
 
 iobuf iobuf::copy() const {
     auto in = iobuf::iterator_consumer(cbegin(), cend());
-    return iobuf_copy(in, _size);
+    auto ret = iobuf_copy(in, _size);
+    ret._origin_shard = _origin_shard;
+    return ret;
 }
 
 iobuf iobuf_copy(iobuf::iterator_consumer& in, size_t len) {

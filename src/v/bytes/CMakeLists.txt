@@ -11,6 +11,7 @@ v_cc_library(
     Seastar::seastar
     v::container
     v::strings
+    v::metrics
   )
 
 v_cc_library(

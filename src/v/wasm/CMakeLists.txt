@@ -19,6 +19,7 @@ v_cc_library(
     v::storage
     v::model
     v::pandaproxy_schema_registry
+    v::bytes
     Seastar::seastar
 )
 
