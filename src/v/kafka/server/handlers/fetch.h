@@ -313,7 +313,7 @@ struct read_result {
           data,
           [](data_t& d) { return std::move(*d); },
           [](foreign_data_t& d) {
-              auto ret = d->copy();
+              auto ret = d->share(0, d->size_bytes());
               d.reset();
               return ret;
           });

@@ -137,7 +137,7 @@ public:
               [](foreign_data_t& d) {
                   // cannot have a move-only type from a remote core
                   // we must make a copy. for iteration use for_each_ref
-                  return (*d.buffer)[d.index++].copy();
+                  return (*d.buffer)[d.index++].share();
               });
         }
         ss::future<> load_slice(timeout_clock::time_point timeout) {
