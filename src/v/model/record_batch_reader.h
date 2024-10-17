@@ -13,6 +13,7 @@
 
 #include "base/likely.h"
 #include "base/seastarx.h"
+#include "bytes/stats.h"
 #include "container/fragmented_vector.h"
 #include "model/record.h"
 #include "model/timeout_clock.h"
@@ -137,6 +138,9 @@ public:
               [](foreign_data_t& d) {
                   // cannot have a move-only type from a remote core
                   // we must make a copy. for iteration use for_each_ref
+                  get_iobuf_stats().needed_foreign_frees++;
+                  get_iobuf_stats().copied_bytes
+                    += (*d.buffer)[d.index].size_bytes();
                   return (*d.buffer)[d.index++].share();
               });
         }

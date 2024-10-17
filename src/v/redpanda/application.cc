@@ -10,6 +10,7 @@
 #include "redpanda/application.h"
 
 #include "base/vlog.h"
+#include "bytes/stats.h"
 #include "cli_parser.h"
 #include "cloud_io/remote.h"
 #include "cloud_storage/cache_service.h"
@@ -100,6 +101,7 @@
 #include "kafka/server/group_manager.h"
 #include "kafka/server/group_router.h"
 #include "kafka/server/group_tx_tracker_stm.h"
+#include "kafka/server/handlers/fetch.h"
 #include "kafka/server/queue_depth_monitor.h"
 #include "kafka/server/quota_manager.h"
 #include "kafka/server/rm_group_frontend.h"
@@ -148,6 +150,7 @@
 #include "wasm/impl.h"
 
 #include <seastar/core/abort_source.hh>
+#include <seastar/core/deleter.hh>
 #include <seastar/core/memory.hh>
 #include <seastar/core/metrics.hh>
 #include <seastar/core/prometheus.hh>
@@ -740,6 +743,30 @@ void application::setup_public_metrics() {
                     .count();
               },
               sm::description("Total CPU busy time in seconds"))});
+          public_metrics.groups.add_group(
+            "all",
+            {
+              sm::make_counter(
+                "deleter_ops",
+                [] {
+                    return ss::get_deleter_stats().decrements
+                           + ss::get_deleter_stats().increments;
+                },
+                sm::description("number of atomic deleter ops")),
+
+              sm::make_counter(
+                "iobuf_copied_bytes",
+                [] { return get_iobuf_stats().copied_bytes; },
+                sm::description(
+                  "number of bytes copied in fetch from cross-shard calls")),
+
+              sm::make_counter(
+                "iobuf_needed_foreign_frees",
+                [] { return get_iobuf_stats().needed_foreign_frees; },
+                sm::description(
+                  "number of bytes copied in fetch from cross-shard calls")),
+
+            });
       })
       .get();
 

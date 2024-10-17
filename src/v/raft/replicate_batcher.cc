@@ -9,6 +9,7 @@
 
 #include "raft/replicate_batcher.h"
 
+#include "bytes/stats.h"
 #include "container/fragmented_vector.h"
 #include "raft/consensus.h"
 #include "raft/replicate_entries_stm.h"
@@ -164,6 +165,8 @@ replicate_batcher::do_cache_with_backpressure(
         if (b.header().ctx.owner_shard == ss::this_shard_id()) {
             data.push_back(std::move(b));
         } else {
+            get_iobuf_stats().copied_bytes += b.size_bytes();
+            get_iobuf_stats().needed_foreign_frees++;
             data.push_back(b.share());
         }
     }

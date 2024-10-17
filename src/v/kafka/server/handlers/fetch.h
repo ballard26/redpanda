@@ -9,6 +9,7 @@
  * by the Apache License, Version 2.0
  */
 #pragma once
+#include "bytes/stats.h"
 #include "cluster/rm_stm.h"
 #include "container/intrusive_list_helpers.h"
 #include "kafka/protocol/fetch.h"
@@ -314,6 +315,8 @@ struct read_result {
           [](data_t& d) { return std::move(*d); },
           [](foreign_data_t& d) {
               auto ret = d->share(0, d->size_bytes());
+              get_iobuf_stats().copied_bytes += d->size_bytes();
+              get_iobuf_stats().needed_foreign_frees++;
               d.reset();
               return ret;
           });
