@@ -645,6 +645,21 @@ redpanda_cc_library(
     name = "copy_range",
     hdrs = [
         "copy_range.h",
+    name = "copy_range",
+    hdrs = [
+        "copy_range.h",
+    ],
+    include_prefix = "utils",
+    deps = [
+        "//src/v/base",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_library(
+    name = "null_output_stream",
+    hdrs = [
+        "null_output_stream.h",
     ],
     include_prefix = "utils",
     deps = [
