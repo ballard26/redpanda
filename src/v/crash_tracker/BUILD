@@ -3,10 +3,16 @@ load("//bazel:build.bzl", "redpanda_cc_library")
 redpanda_cc_library(
     name = "crash_tracker",
     srcs = [
+        "limiter.cc",
         "logger.cc",
+        "recorder.cc",
+        "service.cc",
     ],
     hdrs = [
+        "limiter.h",
         "logger.h",
+        "recorder.h",
+        "service.h",
         "types.h",
     ],
     implementation_deps = [
