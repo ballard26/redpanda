@@ -116,6 +116,7 @@ redpanda_test_cc_library(
         "//src/v/serde/avro/tests:data_generator",
         "//src/v/serde/protobuf/tests:data_generator",
         "//src/v/storage:record_batch_builder",
+        "//src/v/utils:absl_sstring_hash",
         "//src/v/utils:named_type",
         "@seastar",
     ],
