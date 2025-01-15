@@ -5,4 +5,6 @@ v_cc_library(
   DEPS
     Seastar::seastar
     v::base
+    v::model
+    v::serde
 )
