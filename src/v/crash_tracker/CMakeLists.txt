@@ -8,6 +8,9 @@ v_cc_library(
   DEPS
     Seastar::seastar
     v::base
+    v::bytes
     v::model
     v::serde
+    v::hashing
+    v::random
 )

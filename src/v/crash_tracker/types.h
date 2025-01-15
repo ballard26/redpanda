@@ -48,4 +48,18 @@ struct crash_description
     }
 };
 
+struct crash_tracker_metadata
+  : serde::envelope<
+      crash_tracker_metadata,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    uint32_t crash_count{0};
+    uint64_t config_checksum{0};
+    model::timestamp last_start_ts;
+
+    auto serde_fields() {
+        return std::tie(crash_count, config_checksum, last_start_ts);
+    }
+};
+
 } // namespace crash_tracker
