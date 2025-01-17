@@ -932,6 +932,15 @@ struct protobuf_schema_definition::impl {
         for (const int i : oneofs) {
             const auto& decl = message.oneof_decl(i);
             fmt::print(os, "{:{}}oneof {} {{\n", "", indent + 2, decl.name());
+            auto uninterpreted_options = maybe_sorted(
+              decl.options().uninterpreted_option(),
+              std::less{},
+              [](const pb::UninterpretedOption& o) {
+                  return fmt::format("{}", fmt::join(o.name(), ""));
+              });
+            for (const auto& option : uninterpreted_options) {
+                fmt::print(os, "{:{}}option {};\n", "", indent + 4, option);
+            }
             auto fields = maybe_sorted(
               message.field(),
               std::ranges::less{},
