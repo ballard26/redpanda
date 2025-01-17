@@ -131,18 +131,18 @@ struct fmt::formatter<google::protobuf::UninterpretedOption>
         const auto fmt = [&](const auto& val) {
             if (option.has_string_value()) {
                 return fmt::format_to(
-                  ctx.out(), "{} = \"{}\"", fmt::join(option.name(), ""), val);
+                  ctx.out(), "{} = \"{}\"", fmt::join(option.name(), "."), val);
             } else if (option.has_aggregate_value()) {
                 return fmt::format_to(
                   ctx.out(),
                   "{} = {{{}\n{:{}}}}",
-                  fmt::join(option.name(), ""),
+                  fmt::join(option.name(), "."),
                   val,
                   "",
                   indent + 2);
             }
             return fmt::format_to(
-              ctx.out(), "{} = {}", fmt::join(option.name(), ""), val);
+              ctx.out(), "{} = {}", fmt::join(option.name(), "."), val);
         };
         if (option.has_identifier_value()) {
             return fmt(option.identifier_value());
@@ -786,7 +786,7 @@ struct protobuf_schema_definition::impl {
               options.uninterpreted_option(),
               std::less{},
               [](const auto& option) {
-                  return fmt::format("{}", fmt::join(option.name(), ""));
+                  return fmt::format("{}", fmt::join(option.name(), "."));
               });
             for (const auto& option : uninterpreted_options) {
                 maybe_print_seperator();
@@ -866,7 +866,7 @@ struct protobuf_schema_definition::impl {
           message.options().uninterpreted_option(),
           std::less{},
           [](const auto& option) {
-              return fmt::format("{}", fmt::join(option.name(), ""));
+              return fmt::format("{}", fmt::join(option.name(), "."));
           });
         for (const auto& option : uninterepreted_options) {
             fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
@@ -1097,7 +1097,7 @@ struct protobuf_schema_definition::impl {
               service.options().uninterpreted_option(),
               std::less{},
               [](const pb::UninterpretedOption& o) {
-                  return fmt::format("{}", fmt::join(o.name(), ""));
+                  return fmt::format("{}", fmt::join(o.name(), "."));
               });
             for (const auto& option : uninterpreted_options) {
                 fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
@@ -1106,7 +1106,7 @@ struct protobuf_schema_definition::impl {
         for (const auto& method : service.method()) {
             fmt::print(
               os,
-              "{:{}}rpc {} ({}{}) returns ({}{});\n",
+              "{:{}}rpc {} ({}{}) returns ({}{})",
               "",
               indent + 2,
               method.name(),
@@ -1115,6 +1115,7 @@ struct protobuf_schema_definition::impl {
               method.server_streaming() ? "stream " : "",
               method.output_type());
             if (method.has_options()) {
+                fmt::print(os, " {{\n");
                 if (method.options().has_deprecated()) {
                     fmt::print(
                       os,
@@ -1136,11 +1137,14 @@ struct protobuf_schema_definition::impl {
                   method.options().uninterpreted_option(),
                   std::less{},
                   [](const pb::UninterpretedOption& o) {
-                      return fmt::format("{}", fmt::join(o.name(), ""));
+                      return fmt::format("{}", fmt::join(o.name(), "."));
                   });
                 for (const auto& option : uninterpreted_options) {
-                    fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
+                    fmt::print(os, "{:{}}option {};\n", "", indent + 4, option);
                 }
+                fmt::print(os, "{:{}}}}\n", "", indent + 2);
+            } else {
+                fmt::print(os, ";\n");
             }
         }
         fmt::print(os, "{:{}}}}\n", "", indent);
@@ -1218,7 +1222,7 @@ struct protobuf_schema_definition::impl {
           options.uninterpreted_option(),
           std::less{},
           [](const pb::UninterpretedOption& o) {
-              return fmt::format("{}", fmt::join(o.name(), ""));
+              return fmt::format("{}", fmt::join(o.name(), "."));
           });
         for (const auto& option : uninterpreted_options) {
             first_option = false;
