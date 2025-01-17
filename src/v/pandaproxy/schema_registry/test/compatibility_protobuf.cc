@@ -597,6 +597,384 @@ message Bar {
       foobar_proto);
 }
 
+// proto file copied from
+// https://protobuf.dev/programming-guides/proto2/#customoptions
+SEASTAR_THREAD_TEST_CASE(test_protobuf_normalize_custom_options) {
+    auto schema = R"(import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.FileOptions {
+  optional string my_file_option = 50000;
+}
+extend google.protobuf.MessageOptions {
+  optional int32 my_message_option = 50001;
+}
+extend google.protobuf.FieldOptions {
+  optional float my_field_option = 50002;
+}
+extend google.protobuf.OneofOptions {
+  optional int64 my_oneof_option = 50003;
+}
+extend google.protobuf.EnumOptions {
+  optional bool my_enum_option = 50004;
+}
+extend google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option = 50005;
+}
+extend google.protobuf.ServiceOptions {
+  optional MyEnum my_service_option = 50006;
+}
+extend google.protobuf.MethodOptions {
+  optional MyMessage my_method_option = 50007;
+}
+
+option (my_file_option) = "Hello world!";
+
+message MyMessage {
+  option (my_message_option) = 1234;
+
+  optional int32 foo = 1 [(my_field_option) = 4.5];
+  optional string bar = 2;
+  oneof qux {
+    option (my_oneof_option) = 42;
+
+    string quux = 3;
+  }
+}
+
+enum MyEnum {
+  option (my_enum_option) = true;
+
+  FOO = 1 [(my_enum_value_option) = 321];
+  BAR = 2;
+}
+
+message RequestType {}
+message ResponseType {}
+
+service MyService {
+  option (my_service_option) = FOO;
+
+  rpc MyMethod(RequestType) returns(ResponseType) {
+    // Note:  my_method_option has type MyMessage.  We can set each field
+    //   within it using a separate "option" line.
+    option (my_method_option).foo = 567;
+    option (my_method_option).bar = "Some string";
+  }
+}
+)";
+
+    auto sanitized = R"(syntax = "proto2";
+
+import "google/protobuf/descriptor.proto";
+
+option (my_file_option) = "Hello world!";
+
+message MyMessage {
+  option (my_message_option) = 1234;
+  optional int32 foo = 1 [(my_field_option) = 4.5];
+  optional string bar = 2;
+
+  oneof qux {
+    option (my_oneof_option) = 42;
+    string quux = 3;
+  }
+}
+message RequestType {
+}
+message ResponseType {
+}
+enum MyEnum {
+  option (my_enum_option) = true;
+  FOO = 1 [(my_enum_value_option) = 321];
+  BAR = 2;
+}
+extend google.protobuf.FileOptions {
+  optional string my_file_option = 50000;
+}
+extend google.protobuf.MessageOptions {
+  optional int32 my_message_option = 50001;
+}
+extend google.protobuf.FieldOptions {
+  optional float my_field_option = 50002;
+}
+extend google.protobuf.OneofOptions {
+  optional int64 my_oneof_option = 50003;
+}
+extend google.protobuf.EnumOptions {
+  optional bool my_enum_option = 50004;
+}
+extend google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option = 50005;
+}
+extend google.protobuf.ServiceOptions {
+  optional MyEnum my_service_option = 50006;
+}
+extend google.protobuf.MethodOptions {
+  optional MyMessage my_method_option = 50007;
+}
+
+service MyService {
+  option (my_service_option) = FOO;
+  rpc MyMethod (RequestType) returns (ResponseType) {
+    option (my_method_option).foo = 567;
+    option (my_method_option).bar = "Some string";
+  }
+}
+
+)";
+
+    auto normalized = R"(syntax = "proto2";
+
+import "google/protobuf/descriptor.proto";
+
+option (my_file_option) = "Hello world!";
+
+message MyMessage {
+  option (my_message_option) = 1234;
+  optional int32 foo = 1 [(my_field_option) = 4.5];
+  optional string bar = 2;
+
+  oneof qux {
+    option (my_oneof_option) = 42;
+    string quux = 3;
+  }
+}
+message RequestType {
+}
+message ResponseType {
+}
+enum MyEnum {
+  option (my_enum_option) = true;
+  FOO = 1 [(my_enum_value_option) = 321];
+  BAR = 2;
+}
+extend .google.protobuf.FileOptions {
+  optional string my_file_option = 50000;
+}
+extend .google.protobuf.MessageOptions {
+  optional int32 my_message_option = 50001;
+}
+extend .google.protobuf.FieldOptions {
+  optional float my_field_option = 50002;
+}
+extend .google.protobuf.OneofOptions {
+  optional int64 my_oneof_option = 50003;
+}
+extend .google.protobuf.EnumOptions {
+  optional bool my_enum_option = 50004;
+}
+extend .google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option = 50005;
+}
+extend .google.protobuf.ServiceOptions {
+  optional .MyEnum my_service_option = 50006;
+}
+extend .google.protobuf.MethodOptions {
+  optional .MyMessage my_method_option = 50007;
+}
+
+service MyService {
+  option (my_service_option) = FOO;
+  rpc MyMethod (.RequestType) returns (.ResponseType) {
+    option (my_method_option).bar = "Some string";
+    option (my_method_option).foo = 567;
+  }
+}
+
+)";
+    BOOST_CHECK_EQUAL(
+      sanitize(schema, pps::normalize::no, pps::protobuf_renderer_v2::yes),
+      sanitized);
+    BOOST_CHECK_EQUAL(
+      normalize(schema, pps::protobuf_renderer_v2::yes), normalized);
+}
+
+SEASTAR_THREAD_TEST_CASE(test_protobuf_normalize_nested_custom_options) {
+    auto schema = R"(import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.MessageOptions {
+  optional int32 my_message_option = 50001;
+}
+extend google.protobuf.FieldOptions {
+  optional float my_field_option = 50002;
+}
+extend google.protobuf.EnumOptions {
+  optional bool my_enum_option = 50004;
+}
+extend google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option = 50005;
+}
+
+message MyMessage {
+  option (my_message_option) = 1234;
+
+  optional int32 foo = 1 [(my_field_option) = 4.5];
+  optional NestedMessage nested_msg = 2;
+  optional NestedEnum nested_enum = 3;
+
+  enum NestedEnum {
+    option (my_enum_option) = true;
+
+    FOO = 1 [(my_enum_value_option) = 432];
+    BAR = 2;
+  }
+  message NestedMessage {
+    option (my_message_option) = 2345;
+
+    optional int32 foo = 1 [(my_field_option) = 6.5];
+    optional string bar = 2;
+  }
+}
+
+)";
+
+    auto sanitized = R"(syntax = "proto2";
+
+import "google/protobuf/descriptor.proto";
+
+message MyMessage {
+  option (my_message_option) = 1234;
+  optional int32 foo = 1 [(my_field_option) = 4.5];
+  optional NestedMessage nested_msg = 2;
+  optional NestedEnum nested_enum = 3;
+
+  message NestedMessage {
+    option (my_message_option) = 2345;
+    optional int32 foo = 1 [(my_field_option) = 6.5];
+    optional string bar = 2;
+  }
+  enum NestedEnum {
+    option (my_enum_option) = true;
+    FOO = 1 [(my_enum_value_option) = 432];
+    BAR = 2;
+  }
+}
+extend google.protobuf.MessageOptions {
+  optional int32 my_message_option = 50001;
+}
+extend google.protobuf.FieldOptions {
+  optional float my_field_option = 50002;
+}
+extend google.protobuf.EnumOptions {
+  optional bool my_enum_option = 50004;
+}
+extend google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option = 50005;
+}
+
+)";
+
+    auto normalized = R"(syntax = "proto2";
+
+import "google/protobuf/descriptor.proto";
+
+message MyMessage {
+  option (my_message_option) = 1234;
+  optional int32 foo = 1 [(my_field_option) = 4.5];
+  optional .MyMessage.NestedMessage nested_msg = 2;
+  optional .MyMessage.NestedEnum nested_enum = 3;
+
+  message NestedMessage {
+    option (my_message_option) = 2345;
+    optional int32 foo = 1 [(my_field_option) = 6.5];
+    optional string bar = 2;
+  }
+  enum NestedEnum {
+    option (my_enum_option) = true;
+    FOO = 1 [(my_enum_value_option) = 432];
+    BAR = 2;
+  }
+}
+extend .google.protobuf.MessageOptions {
+  optional int32 my_message_option = 50001;
+}
+extend .google.protobuf.FieldOptions {
+  optional float my_field_option = 50002;
+}
+extend .google.protobuf.EnumOptions {
+  optional bool my_enum_option = 50004;
+}
+extend .google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option = 50005;
+}
+
+)";
+    BOOST_CHECK_EQUAL(
+      sanitize(schema, pps::normalize::no, pps::protobuf_renderer_v2::yes),
+      sanitized);
+    BOOST_CHECK_EQUAL(
+      normalize(schema, pps::protobuf_renderer_v2::yes), normalized);
+}
+
+SEASTAR_THREAD_TEST_CASE(test_protobuf_normalize_message_custom_options) {
+    const auto schema = R"(syntax = "proto3";
+
+import "google/protobuf/descriptor.proto";
+
+enum MyEnum {
+  VALUE_0 = 0;
+  VALUE_1 = 1 [(metadata) = {
+    some_bool: true,
+    some_string: "test_string"
+  }];
+}
+
+message Metadata {
+    bool some_bool = 1;
+    string some_string = 2;
+}
+
+extend google.protobuf.EnumValueOptions {
+  Metadata metadata = 50001;
+}
+
+)";
+
+    const auto sanitized = R"(syntax = "proto3";
+
+import "google/protobuf/descriptor.proto";
+
+message Metadata {
+  bool some_bool = 1;
+  string some_string = 2;
+}
+enum MyEnum {
+  VALUE_0 = 0;
+  VALUE_1 = 1 [(metadata) = {some_bool : true , some_string : "test_string"
+  }];
+}
+extend google.protobuf.EnumValueOptions {
+  Metadata metadata = 50001;
+}
+
+)";
+
+    const auto normalized = R"(syntax = "proto3";
+
+import "google/protobuf/descriptor.proto";
+
+message Metadata {
+  bool some_bool = 1;
+  string some_string = 2;
+}
+enum MyEnum {
+  VALUE_0 = 0;
+  VALUE_1 = 1 [(metadata) = {some_bool : true , some_string : "test_string"
+  }];
+}
+extend .google.protobuf.EnumValueOptions {
+  .Metadata metadata = 50001;
+}
+
+)";
+
+    BOOST_REQUIRE_EQUAL(
+      sanitize(schema, pps::normalize::no, pps::protobuf_renderer_v2::yes),
+      sanitized);
+    BOOST_CHECK_EQUAL(
+      normalize(schema, pps::protobuf_renderer_v2::yes), normalized);
+}
+
 SEASTAR_THREAD_TEST_CASE(test_protobuf_sanitize_no_syntax) {
     BOOST_REQUIRE_EQUAL(
       sanitize(R"(

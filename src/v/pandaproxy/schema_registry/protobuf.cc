@@ -28,6 +28,7 @@
 #include <absl/container/flat_hash_set.h>
 #include <absl/strings/ascii.h>
 #include <boost/algorithm/string/trim.hpp>
+#include <boost/range/combine.hpp>
 #include <confluent/meta.pb.h>
 #include <confluent/types/decimal.pb.h>
 #include <fmt/core.h>
@@ -555,7 +556,8 @@ struct protobuf_schema_definition::impl {
         if (is_normalized) {
             pb::FileDescriptorProto tmp_fdp;
             fd->CopyTo(&tmp_fdp);
-            render_proto(osb.ostream(), std::move(tmp_fdp), *fd);
+            copy_uninterpreted_options(fdp, tmp_fdp);
+            render_proto(osb.ostream(), tmp_fdp, *fd);
         } else {
             render_proto(osb.ostream(), fdp, *fd);
         }
@@ -598,6 +600,89 @@ struct protobuf_schema_definition::impl {
 
         std::variant<Range, std::reference_wrapper<const Range>> _r;
     };
+
+    template<typename Proto>
+    void copy_options(const Proto& from, Proto& to) const {
+        if (!from.has_options()) {
+            return;
+        }
+        to.mutable_options()->CopyFrom(from.options());
+    }
+
+    void copy_uninterpreted_options(
+      const pb::DescriptorProto& from, pb::DescriptorProto& to) const {
+        copy_options(from, to);
+
+        for (auto&& [field_from, field_to] :
+             boost::combine(from.field(), *to.mutable_field())) {
+            copy_uninterpreted_options(field_from, field_to);
+        }
+
+        // oneof decl
+        for (auto&& [oneof_from, oneof_to] :
+             boost::combine(from.oneof_decl(), *to.mutable_oneof_decl())) {
+            copy_options(oneof_from, oneof_to);
+        }
+
+        // nested messages
+        for (auto&& [nested_from, nested_to] :
+             boost::combine(from.nested_type(), *to.mutable_nested_type())) {
+            copy_uninterpreted_options(nested_from, nested_to);
+        }
+
+        // nested enums
+        for (auto&& [enum_from, enum_to] :
+             boost::combine(from.enum_type(), *to.mutable_enum_type())) {
+            copy_uninterpreted_options(enum_from, enum_to);
+        }
+    }
+
+    void copy_uninterpreted_options(
+      const pb::EnumDescriptorProto& from, pb::EnumDescriptorProto& to) const {
+        copy_options(from, to);
+
+        for (auto&& [value_from, value_to] :
+             boost::combine(from.value(), *to.mutable_value())) {
+            copy_options(value_from, value_to);
+        }
+    }
+
+    void copy_uninterpreted_options(
+      const pb::ServiceDescriptorProto& from,
+      pb::ServiceDescriptorProto& to) const {
+        copy_options(from, to);
+
+        for (auto&& [method_from, method_to] :
+             boost::combine(from.method(), *to.mutable_method())) {
+            copy_options(method_from, method_to);
+        }
+    }
+
+    void copy_uninterpreted_options(
+      const pb::FieldDescriptorProto& from,
+      pb::FieldDescriptorProto& to) const {
+        copy_options(from, to);
+    }
+
+    void copy_uninterpreted_options(
+      const pb::FileDescriptorProto& from, pb::FileDescriptorProto& to) const {
+        copy_options(from, to);
+
+        for (auto&& [message_from, message_to] :
+             boost::combine(from.message_type(), *to.mutable_message_type())) {
+            copy_uninterpreted_options(message_from, message_to);
+        }
+
+        for (auto&& [enum_from, enum_to] :
+             boost::combine(from.enum_type(), *to.mutable_enum_type())) {
+            copy_uninterpreted_options(enum_from, enum_to);
+        }
+
+        for (auto&& [service_from, service_to] :
+             boost::combine(from.service(), *to.mutable_service())) {
+            copy_uninterpreted_options(service_from, service_to);
+        }
+    }
 
     template<
       std::ranges::random_access_range Range,
