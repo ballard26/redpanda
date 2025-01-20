@@ -1127,7 +1127,13 @@ struct protobuf_schema_definition::impl {
               indent + 2,
               enum_proto.options().deprecated());
         }
-        for (const auto& option : enum_proto.options().uninterpreted_option()) {
+        auto uninterpreted_options = maybe_sorted(
+          enum_proto.options().uninterpreted_option(),
+          std::less{},
+          [](const pb::UninterpretedOption& o) {
+              return fmt::format("{}", fmt::join(o.name(), ""));
+          });
+        for (const auto& option : uninterpreted_options) {
             fmt::print(os, "{:{}}option {};\n", "", indent + 2, option);
         }
         std::optional<std::decay_t<decltype(enum_proto.value())>> values;
@@ -1160,10 +1166,15 @@ struct protobuf_schema_definition::impl {
                 }
                 if (!value.options().uninterpreted_option().empty()) {
                     maybe_print_comma();
+                    auto uninterpreted_options = maybe_sorted(
+                      value.options().uninterpreted_option(),
+                      std::less{},
+                      [](const auto& option) {
+                          return fmt::format(
+                            "{}", fmt::join(option.name(), "."));
+                      });
                     fmt::print(
-                      os,
-                      "{}",
-                      fmt::join(value.options().uninterpreted_option(), ", "));
+                      os, "{}", fmt::join(uninterpreted_options, ", "));
                 }
                 fmt::print(os, "]");
             }

@@ -603,48 +603,60 @@ SEASTAR_THREAD_TEST_CASE(test_protobuf_normalize_custom_options) {
     auto schema = R"(import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.FileOptions {
-  optional string my_file_option = 50000;
+  optional string my_file_option_b = 50008;
+  optional string my_file_option_a = 50000;
 }
 extend google.protobuf.MessageOptions {
-  optional int32 my_message_option = 50001;
+  optional int32 my_message_option_b = 50009;
+  optional int32 my_message_option_a = 50001;
 }
 extend google.protobuf.FieldOptions {
-  optional float my_field_option = 50002;
+  optional float my_field_option_b = 50010;
+  optional float my_field_option_a = 50002;
 }
 extend google.protobuf.OneofOptions {
-  optional int64 my_oneof_option = 50003;
+  optional int64 my_oneof_option_b = 50011;
+  optional int64 my_oneof_option_a = 50003;
 }
 extend google.protobuf.EnumOptions {
-  optional bool my_enum_option = 50004;
+  optional bool my_enum_option_b = 50012;
+  optional bool my_enum_option_a = 50004;
 }
 extend google.protobuf.EnumValueOptions {
-  optional uint32 my_enum_value_option = 50005;
+  optional uint32 my_enum_value_option_b = 50013;
+  optional uint32 my_enum_value_option_a = 50005;
 }
 extend google.protobuf.ServiceOptions {
-  optional MyEnum my_service_option = 50006;
+  optional MyEnum my_service_option_b = 50014;
+  optional MyEnum my_service_option_a = 50006;
 }
 extend google.protobuf.MethodOptions {
-  optional MyMessage my_method_option = 50007;
+  optional MyMessage my_method_option_b = 50015;
+  optional MyMessage my_method_option_a = 50007;
 }
 
-option (my_file_option) = "Hello world!";
+option (my_file_option_b) = "Some other string";
+option (my_file_option_a) = "Hello world!";
 
 message MyMessage {
-  option (my_message_option) = 1234;
+  option (my_message_option_b) = 2345;
+  option (my_message_option_a) = 1234;
 
-  optional int32 foo = 1 [(my_field_option) = 4.5];
+  optional int32 foo = 1 [(my_field_option_b) = 5.5, (my_field_option_a) = 4.5];
   optional string bar = 2;
   oneof qux {
-    option (my_oneof_option) = 42;
+    option (my_oneof_option_b) = 43;
+    option (my_oneof_option_a) = 42;
 
     string quux = 3;
   }
 }
 
 enum MyEnum {
-  option (my_enum_option) = true;
+  option (my_enum_option_b) = false;
+  option (my_enum_option_a) = true;
 
-  FOO = 1 [(my_enum_value_option) = 321];
+  FOO = 1 [(my_enum_value_option_b) = 432, (my_enum_value_option_a) = 321];
   BAR = 2;
 }
 
@@ -652,13 +664,16 @@ message RequestType {}
 message ResponseType {}
 
 service MyService {
-  option (my_service_option) = FOO;
+  option (my_service_option_b) = BAR;
+  option (my_service_option_a) = FOO;
 
   rpc MyMethod(RequestType) returns(ResponseType) {
-    // Note:  my_method_option has type MyMessage.  We can set each field
+    // Note:  my_method_option_a has type MyMessage.  We can set each field
     //   within it using a separate "option" line.
-    option (my_method_option).foo = 567;
-    option (my_method_option).bar = "Some string";
+    option (my_method_option_b).bar = "Some other string";
+    option (my_method_option_b).foo = 678;
+    option (my_method_option_a).foo = 567;
+    option (my_method_option_a).bar = "Some string";
   }
 }
 )";
@@ -667,15 +682,21 @@ service MyService {
 
 import "google/protobuf/descriptor.proto";
 
-option (my_file_option) = "Hello world!";
+option (my_file_option_b) = "Some other string";
+option (my_file_option_a) = "Hello world!";
 
 message MyMessage {
-  option (my_message_option) = 1234;
-  optional int32 foo = 1 [(my_field_option) = 4.5];
+  option (my_message_option_b) = 2345;
+  option (my_message_option_a) = 1234;
+  optional int32 foo = 1 [
+    (my_field_option_b) = 5.5,
+    (my_field_option_a) = 4.5
+  ];
   optional string bar = 2;
 
   oneof qux {
-    option (my_oneof_option) = 42;
+    option (my_oneof_option_b) = 43;
+    option (my_oneof_option_a) = 42;
     string quux = 3;
   }
 }
@@ -684,40 +705,68 @@ message RequestType {
 message ResponseType {
 }
 enum MyEnum {
-  option (my_enum_option) = true;
-  FOO = 1 [(my_enum_value_option) = 321];
+  option (my_enum_option_b) = false;
+  option (my_enum_option_a) = true;
+  FOO = 1 [(my_enum_value_option_b) = 432, (my_enum_value_option_a) = 321];
   BAR = 2;
 }
 extend google.protobuf.FileOptions {
-  optional string my_file_option = 50000;
+  optional string my_file_option_b = 50008;
+}
+extend google.protobuf.FileOptions {
+  optional string my_file_option_a = 50000;
 }
 extend google.protobuf.MessageOptions {
-  optional int32 my_message_option = 50001;
+  optional int32 my_message_option_b = 50009;
+}
+extend google.protobuf.MessageOptions {
+  optional int32 my_message_option_a = 50001;
 }
 extend google.protobuf.FieldOptions {
-  optional float my_field_option = 50002;
+  optional float my_field_option_b = 50010;
+}
+extend google.protobuf.FieldOptions {
+  optional float my_field_option_a = 50002;
 }
 extend google.protobuf.OneofOptions {
-  optional int64 my_oneof_option = 50003;
+  optional int64 my_oneof_option_b = 50011;
+}
+extend google.protobuf.OneofOptions {
+  optional int64 my_oneof_option_a = 50003;
 }
 extend google.protobuf.EnumOptions {
-  optional bool my_enum_option = 50004;
+  optional bool my_enum_option_b = 50012;
+}
+extend google.protobuf.EnumOptions {
+  optional bool my_enum_option_a = 50004;
 }
 extend google.protobuf.EnumValueOptions {
-  optional uint32 my_enum_value_option = 50005;
+  optional uint32 my_enum_value_option_b = 50013;
+}
+extend google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option_a = 50005;
 }
 extend google.protobuf.ServiceOptions {
-  optional MyEnum my_service_option = 50006;
+  optional MyEnum my_service_option_b = 50014;
+}
+extend google.protobuf.ServiceOptions {
+  optional MyEnum my_service_option_a = 50006;
 }
 extend google.protobuf.MethodOptions {
-  optional MyMessage my_method_option = 50007;
+  optional MyMessage my_method_option_b = 50015;
+}
+extend google.protobuf.MethodOptions {
+  optional MyMessage my_method_option_a = 50007;
 }
 
 service MyService {
-  option (my_service_option) = FOO;
+  option (my_service_option_b) = BAR;
+  option (my_service_option_a) = FOO;
   rpc MyMethod (RequestType) returns (ResponseType) {
-    option (my_method_option).foo = 567;
-    option (my_method_option).bar = "Some string";
+    option (my_method_option_b).bar = "Some other string";
+    option (my_method_option_b).foo = 678;
+    option (my_method_option_a).foo = 567;
+    option (my_method_option_a).bar = "Some string";
   }
 }
 
@@ -727,15 +776,21 @@ service MyService {
 
 import "google/protobuf/descriptor.proto";
 
-option (my_file_option) = "Hello world!";
+option (my_file_option_a) = "Hello world!";
+option (my_file_option_b) = "Some other string";
 
 message MyMessage {
-  option (my_message_option) = 1234;
-  optional int32 foo = 1 [(my_field_option) = 4.5];
+  option (my_message_option_a) = 1234;
+  option (my_message_option_b) = 2345;
+  optional int32 foo = 1 [
+    (my_field_option_a) = 4.5,
+    (my_field_option_b) = 5.5
+  ];
   optional string bar = 2;
 
   oneof qux {
-    option (my_oneof_option) = 42;
+    option (my_oneof_option_a) = 42;
+    option (my_oneof_option_b) = 43;
     string quux = 3;
   }
 }
@@ -744,40 +799,68 @@ message RequestType {
 message ResponseType {
 }
 enum MyEnum {
-  option (my_enum_option) = true;
-  FOO = 1 [(my_enum_value_option) = 321];
+  option (my_enum_option_a) = true;
+  option (my_enum_option_b) = false;
+  FOO = 1 [(my_enum_value_option_a) = 321, (my_enum_value_option_b) = 432];
   BAR = 2;
 }
 extend .google.protobuf.FileOptions {
-  optional string my_file_option = 50000;
+  optional string my_file_option_b = 50008;
+}
+extend .google.protobuf.FileOptions {
+  optional string my_file_option_a = 50000;
 }
 extend .google.protobuf.MessageOptions {
-  optional int32 my_message_option = 50001;
+  optional int32 my_message_option_b = 50009;
+}
+extend .google.protobuf.MessageOptions {
+  optional int32 my_message_option_a = 50001;
 }
 extend .google.protobuf.FieldOptions {
-  optional float my_field_option = 50002;
+  optional float my_field_option_b = 50010;
+}
+extend .google.protobuf.FieldOptions {
+  optional float my_field_option_a = 50002;
 }
 extend .google.protobuf.OneofOptions {
-  optional int64 my_oneof_option = 50003;
+  optional int64 my_oneof_option_b = 50011;
+}
+extend .google.protobuf.OneofOptions {
+  optional int64 my_oneof_option_a = 50003;
 }
 extend .google.protobuf.EnumOptions {
-  optional bool my_enum_option = 50004;
+  optional bool my_enum_option_b = 50012;
+}
+extend .google.protobuf.EnumOptions {
+  optional bool my_enum_option_a = 50004;
 }
 extend .google.protobuf.EnumValueOptions {
-  optional uint32 my_enum_value_option = 50005;
+  optional uint32 my_enum_value_option_b = 50013;
+}
+extend .google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option_a = 50005;
 }
 extend .google.protobuf.ServiceOptions {
-  optional .MyEnum my_service_option = 50006;
+  optional .MyEnum my_service_option_b = 50014;
+}
+extend .google.protobuf.ServiceOptions {
+  optional .MyEnum my_service_option_a = 50006;
 }
 extend .google.protobuf.MethodOptions {
-  optional .MyMessage my_method_option = 50007;
+  optional .MyMessage my_method_option_b = 50015;
+}
+extend .google.protobuf.MethodOptions {
+  optional .MyMessage my_method_option_a = 50007;
 }
 
 service MyService {
-  option (my_service_option) = FOO;
+  option (my_service_option_a) = FOO;
+  option (my_service_option_b) = BAR;
   rpc MyMethod (.RequestType) returns (.ResponseType) {
-    option (my_method_option).bar = "Some string";
-    option (my_method_option).foo = 567;
+    option (my_method_option_a).bar = "Some string";
+    option (my_method_option_a).foo = 567;
+    option (my_method_option_b).bar = "Some other string";
+    option (my_method_option_b).foo = 678;
   }
 }
 
