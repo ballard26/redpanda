@@ -597,7 +597,7 @@ message Bar {
       foobar_proto);
 }
 
-// proto file copied from
+// proto file heavily inspired from
 // https://protobuf.dev/programming-guides/proto2/#customoptions
 SEASTAR_THREAD_TEST_CASE(test_protobuf_normalize_custom_options) {
     auto schema = R"(import "google/protobuf/descriptor.proto";
@@ -609,6 +609,9 @@ extend google.protobuf.FileOptions {
 extend google.protobuf.MessageOptions {
   optional int32 my_message_option_b = 50009;
   optional int32 my_message_option_a = 50001;
+}
+extend google.protobuf.FileOptions {
+  optional string my_file_option_c = 50015;
 }
 extend google.protobuf.FieldOptions {
   optional float my_field_option_b = 50010;
@@ -712,50 +715,37 @@ enum MyEnum {
 }
 extend google.protobuf.FileOptions {
   optional string my_file_option_b = 50008;
-}
-extend google.protobuf.FileOptions {
   optional string my_file_option_a = 50000;
 }
 extend google.protobuf.MessageOptions {
   optional int32 my_message_option_b = 50009;
-}
-extend google.protobuf.MessageOptions {
   optional int32 my_message_option_a = 50001;
+}
+extend google.protobuf.FileOptions {
+  optional string my_file_option_c = 50015;
 }
 extend google.protobuf.FieldOptions {
   optional float my_field_option_b = 50010;
-}
-extend google.protobuf.FieldOptions {
   optional float my_field_option_a = 50002;
 }
 extend google.protobuf.OneofOptions {
   optional int64 my_oneof_option_b = 50011;
-}
-extend google.protobuf.OneofOptions {
   optional int64 my_oneof_option_a = 50003;
 }
 extend google.protobuf.EnumOptions {
   optional bool my_enum_option_b = 50012;
-}
-extend google.protobuf.EnumOptions {
   optional bool my_enum_option_a = 50004;
 }
 extend google.protobuf.EnumValueOptions {
   optional uint32 my_enum_value_option_b = 50013;
-}
-extend google.protobuf.EnumValueOptions {
   optional uint32 my_enum_value_option_a = 50005;
 }
 extend google.protobuf.ServiceOptions {
   optional MyEnum my_service_option_b = 50014;
-}
-extend google.protobuf.ServiceOptions {
   optional MyEnum my_service_option_a = 50006;
 }
 extend google.protobuf.MethodOptions {
   optional MyMessage my_method_option_b = 50015;
-}
-extend google.protobuf.MethodOptions {
   optional MyMessage my_method_option_a = 50007;
 }
 
@@ -806,50 +796,35 @@ enum MyEnum {
 }
 extend .google.protobuf.EnumOptions {
   optional bool my_enum_option_a = 50004;
-}
-extend .google.protobuf.EnumOptions {
   optional bool my_enum_option_b = 50012;
 }
 extend .google.protobuf.EnumValueOptions {
   optional uint32 my_enum_value_option_a = 50005;
-}
-extend .google.protobuf.EnumValueOptions {
   optional uint32 my_enum_value_option_b = 50013;
 }
 extend .google.protobuf.FieldOptions {
   optional float my_field_option_a = 50002;
-}
-extend .google.protobuf.FieldOptions {
   optional float my_field_option_b = 50010;
 }
 extend .google.protobuf.FileOptions {
   optional string my_file_option_a = 50000;
-}
-extend .google.protobuf.FileOptions {
   optional string my_file_option_b = 50008;
+  optional string my_file_option_c = 50015;
 }
 extend .google.protobuf.MessageOptions {
   optional int32 my_message_option_a = 50001;
-}
-extend .google.protobuf.MessageOptions {
   optional int32 my_message_option_b = 50009;
 }
 extend .google.protobuf.MethodOptions {
   optional .MyMessage my_method_option_a = 50007;
-}
-extend .google.protobuf.MethodOptions {
   optional .MyMessage my_method_option_b = 50015;
 }
 extend .google.protobuf.OneofOptions {
   optional int64 my_oneof_option_a = 50003;
-}
-extend .google.protobuf.OneofOptions {
   optional int64 my_oneof_option_b = 50011;
 }
 extend .google.protobuf.ServiceOptions {
   optional .MyEnum my_service_option_a = 50006;
-}
-extend .google.protobuf.ServiceOptions {
   optional .MyEnum my_service_option_b = 50014;
 }
 

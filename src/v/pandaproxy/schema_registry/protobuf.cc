@@ -901,13 +901,32 @@ struct protobuf_schema_definition::impl {
           raw_extensions, std::less{}, [](const auto& extension) {
               return std::make_pair(extension.extendee(), extension.number());
           });
+
+        const auto start_section = [indent, &os](std::string_view ext) {
+            fmt::print(os, "{:{}}extend {} {{\n", "", indent, ext);
+        };
+        const auto close_section = [indent, &os]() {
+            fmt::print(os, "{:{}}}}\n", "", indent);
+        };
+
+        std::string active_extendee{};
+        bool open_section = false;
         for (const auto& extension : extensions) {
             auto d = descriptor.FindExtensionByName(extension.name());
 
-            fmt::print(
-              os, "{:{}}extend {} {{\n", "", indent, extension.extendee());
+            const auto& extendee = extension.extendee();
+            if (active_extendee != extendee) {
+                active_extendee = extendee;
+                if (open_section) {
+                    close_section();
+                }
+                start_section(extendee);
+                open_section = true;
+            }
             render_field(os, edition, extension, d, indent + 2);
-            fmt::print(os, "{:{}}}}\n", "", indent);
+        }
+        if (open_section) {
+            close_section();
         }
     }
 
