@@ -605,6 +605,7 @@ SEASTAR_THREAD_TEST_CASE(test_protobuf_normalize_custom_options) {
 extend google.protobuf.FileOptions {
   optional string my_file_option_b = 50008;
   optional string my_file_option_a = 50000;
+  repeated uint32 my_repeated_file_option = 60000;
 }
 extend google.protobuf.MessageOptions {
   optional int32 my_message_option_b = 50009;
@@ -638,7 +639,10 @@ extend google.protobuf.MethodOptions {
   optional MyMessage my_method_option_a = 50007;
 }
 
+option (my_repeated_file_option) = 2;
 option (my_file_option_b) = "Some other string";
+option (my_repeated_file_option) = 1;
+option (my_repeated_file_option) = 3;
 option (my_file_option_a) = "Hello world!";
 
 message MyMessage {
@@ -685,7 +689,10 @@ service MyService {
 
 import "google/protobuf/descriptor.proto";
 
+option (my_repeated_file_option) = 2;
 option (my_file_option_b) = "Some other string";
+option (my_repeated_file_option) = 1;
+option (my_repeated_file_option) = 3;
 option (my_file_option_a) = "Hello world!";
 
 message MyMessage {
@@ -716,6 +723,7 @@ enum MyEnum {
 extend google.protobuf.FileOptions {
   optional string my_file_option_b = 50008;
   optional string my_file_option_a = 50000;
+  repeated uint32 my_repeated_file_option = 60000;
 }
 extend google.protobuf.MessageOptions {
   optional int32 my_message_option_b = 50009;
@@ -768,6 +776,9 @@ import "google/protobuf/descriptor.proto";
 
 option (my_file_option_a) = "Hello world!";
 option (my_file_option_b) = "Some other string";
+option (my_repeated_file_option) = 1;
+option (my_repeated_file_option) = 2;
+option (my_repeated_file_option) = 3;
 
 message MyMessage {
   option (my_message_option_a) = 1234;
@@ -810,6 +821,7 @@ extend .google.protobuf.FileOptions {
   optional string my_file_option_a = 50000;
   optional string my_file_option_b = 50008;
   optional string my_file_option_c = 50015;
+  repeated uint32 my_repeated_file_option = 60000;
 }
 extend .google.protobuf.MessageOptions {
   optional int32 my_message_option_a = 50001;
