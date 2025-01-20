@@ -804,53 +804,53 @@ enum MyEnum {
   FOO = 1 [(my_enum_value_option_a) = 321, (my_enum_value_option_b) = 432];
   BAR = 2;
 }
-extend .google.protobuf.FileOptions {
-  optional string my_file_option_b = 50008;
-}
-extend .google.protobuf.FileOptions {
-  optional string my_file_option_a = 50000;
-}
-extend .google.protobuf.MessageOptions {
-  optional int32 my_message_option_b = 50009;
-}
-extend .google.protobuf.MessageOptions {
-  optional int32 my_message_option_a = 50001;
-}
-extend .google.protobuf.FieldOptions {
-  optional float my_field_option_b = 50010;
-}
-extend .google.protobuf.FieldOptions {
-  optional float my_field_option_a = 50002;
-}
-extend .google.protobuf.OneofOptions {
-  optional int64 my_oneof_option_b = 50011;
-}
-extend .google.protobuf.OneofOptions {
-  optional int64 my_oneof_option_a = 50003;
+extend .google.protobuf.EnumOptions {
+  optional bool my_enum_option_a = 50004;
 }
 extend .google.protobuf.EnumOptions {
   optional bool my_enum_option_b = 50012;
 }
-extend .google.protobuf.EnumOptions {
-  optional bool my_enum_option_a = 50004;
+extend .google.protobuf.EnumValueOptions {
+  optional uint32 my_enum_value_option_a = 50005;
 }
 extend .google.protobuf.EnumValueOptions {
   optional uint32 my_enum_value_option_b = 50013;
 }
-extend .google.protobuf.EnumValueOptions {
-  optional uint32 my_enum_value_option_a = 50005;
+extend .google.protobuf.FieldOptions {
+  optional float my_field_option_a = 50002;
 }
-extend .google.protobuf.ServiceOptions {
-  optional .MyEnum my_service_option_b = 50014;
+extend .google.protobuf.FieldOptions {
+  optional float my_field_option_b = 50010;
 }
-extend .google.protobuf.ServiceOptions {
-  optional .MyEnum my_service_option_a = 50006;
+extend .google.protobuf.FileOptions {
+  optional string my_file_option_a = 50000;
+}
+extend .google.protobuf.FileOptions {
+  optional string my_file_option_b = 50008;
+}
+extend .google.protobuf.MessageOptions {
+  optional int32 my_message_option_a = 50001;
+}
+extend .google.protobuf.MessageOptions {
+  optional int32 my_message_option_b = 50009;
+}
+extend .google.protobuf.MethodOptions {
+  optional .MyMessage my_method_option_a = 50007;
 }
 extend .google.protobuf.MethodOptions {
   optional .MyMessage my_method_option_b = 50015;
 }
-extend .google.protobuf.MethodOptions {
-  optional .MyMessage my_method_option_a = 50007;
+extend .google.protobuf.OneofOptions {
+  optional int64 my_oneof_option_a = 50003;
+}
+extend .google.protobuf.OneofOptions {
+  optional int64 my_oneof_option_b = 50011;
+}
+extend .google.protobuf.ServiceOptions {
+  optional .MyEnum my_service_option_a = 50006;
+}
+extend .google.protobuf.ServiceOptions {
+  optional .MyEnum my_service_option_b = 50014;
 }
 
 service MyService {
@@ -968,17 +968,17 @@ message MyMessage {
     BAR = 2;
   }
 }
-extend .google.protobuf.MessageOptions {
-  optional int32 my_message_option = 50001;
-}
-extend .google.protobuf.FieldOptions {
-  optional float my_field_option = 50002;
-}
 extend .google.protobuf.EnumOptions {
   optional bool my_enum_option = 50004;
 }
 extend .google.protobuf.EnumValueOptions {
   optional uint32 my_enum_value_option = 50005;
+}
+extend .google.protobuf.FieldOptions {
+  optional float my_field_option = 50002;
+}
+extend .google.protobuf.MessageOptions {
+  optional int32 my_message_option = 50001;
 }
 
 )";

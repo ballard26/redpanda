@@ -890,16 +890,25 @@ struct protobuf_schema_definition::impl {
         }
     }
 
-    void render_extension(
+    template<typename Descriptor>
+    void render_extensions(
       std::ostream& os,
       pb::Edition edition,
-      const google::protobuf::FieldDescriptorProto& field,
-      const google::protobuf::FieldDescriptor* descriptor,
+      const pb::RepeatedPtrField<pb::FieldDescriptorProto>& raw_extensions,
+      const Descriptor& descriptor,
       int indent) const {
-        // Render the field as an extension
-        fmt::print(os, "{:{}}extend {} {{\n", "", indent, field.extendee());
-        render_field(os, edition, field, descriptor, indent + 2);
-        fmt::print(os, "{:{}}}}\n", "", indent);
+        auto extensions = maybe_sorted(
+          raw_extensions, std::less{}, [](const auto& extension) {
+              return std::make_pair(extension.extendee(), extension.number());
+          });
+        for (const auto& extension : extensions) {
+            auto d = descriptor.FindExtensionByName(extension.name());
+
+            fmt::print(
+              os, "{:{}}extend {} {{\n", "", indent, extension.extendee());
+            render_field(os, edition, extension, d, indent + 2);
+            fmt::print(os, "{:{}}}}\n", "", indent);
+        }
     }
 
     // Render a message, including nested messages
@@ -1050,11 +1059,8 @@ struct protobuf_schema_definition::impl {
               range.end() - 1);
         }
 
-        // Render extensions
-        for (const auto& extension : message.extension()) {
-            auto d = descriptor->FindExtensionByName(extension.name());
-            render_extension(os, edition, extension, d, indent + 2);
-        }
+        render_extensions(
+          os, edition, message.extension(), *descriptor, indent + 2);
 
         auto nested_messages = std::views::filter(
           message.nested_type(),
@@ -1431,10 +1437,7 @@ struct protobuf_schema_definition::impl {
             render_enum(os, enum_proto, 0);
         }
 
-        for (const auto& extension : fdp.extension()) {
-            auto d = descriptor.FindExtensionByName(extension.name());
-            render_extension(os, edition, extension, d, 0);
-        }
+        render_extensions(os, edition, fdp.extension(), descriptor, 0);
 
         if ((fdp.message_type_size() + fdp.enum_type_size()) != 0) {
             fmt::print(os, "\n");
