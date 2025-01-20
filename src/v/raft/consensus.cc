@@ -3250,7 +3250,7 @@ std::ostream& operator<<(std::ostream& o, const consensus& c) {
     return o;
 }
 
-group_configuration consensus::config() const {
+const group_configuration& consensus::config() const {
     return _configuration_manager.get_latest();
 }
 
