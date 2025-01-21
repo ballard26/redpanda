@@ -21,16 +21,16 @@
 #include <chrono>
 
 namespace kafka {
-class latency_probe {
+class kafka_probe {
 public:
     using hist_t = log_hist_internal;
 
-    latency_probe() = default;
-    latency_probe(const latency_probe&) = delete;
-    latency_probe& operator=(const latency_probe&) = delete;
-    latency_probe(latency_probe&&) = delete;
-    latency_probe& operator=(latency_probe&&) = delete;
-    ~latency_probe() = default;
+    kafka_probe() = default;
+    kafka_probe(const kafka_probe&) = delete;
+    kafka_probe& operator=(const kafka_probe&) = delete;
+    kafka_probe(kafka_probe&&) = delete;
+    kafka_probe& operator=(kafka_probe&&) = delete;
+    ~kafka_probe() = default;
 
     void setup_metrics() {
         namespace sm = ss::metrics;
