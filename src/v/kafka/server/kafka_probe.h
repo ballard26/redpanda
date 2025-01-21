@@ -19,6 +19,7 @@
 #include <seastar/core/metrics.hh>
 
 #include <chrono>
+#include <cstdint>
 
 namespace kafka {
 class kafka_probe {
@@ -58,6 +59,19 @@ public:
           },
           {},
           {sm::shard_label});
+
+        _metrics.add_group(
+          "kafka",
+          {
+            sm::make_histogram(
+              "batch_size",
+              sm::description(
+                "Batch size across all topics measured at the kafka layer."),
+              labels,
+              [this] { return _batch_size.batch_size_histogram_logform(); }),
+          },
+          {},
+          {sm::shard_label});
     }
 
     void setup_public_metrics() {
@@ -92,9 +106,13 @@ public:
         _fetch_latency.record(micros.count());
     }
 
+    void record_batch(uint64_t size) { _batch_size.record(size); }
+
 private:
     hist_t _produce_latency;
     hist_t _fetch_latency;
+    // non partition or topic related as that is too expensive for histograms
+    batch_size_hist _batch_size;
     metrics::internal_metric_groups _metrics;
     metrics::public_metric_groups _public_metrics;
 };
