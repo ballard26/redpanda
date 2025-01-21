@@ -635,6 +635,12 @@ struct protobuf_schema_definition::impl {
              boost::combine(from.enum_type(), *to.mutable_enum_type())) {
             copy_uninterpreted_options(enum_from, enum_to);
         }
+
+        // nested extentions
+        for (auto&& [extension_from, extension_to] :
+             boost::combine(from.extension(), *to.mutable_extension())) {
+            copy_uninterpreted_options(extension_from, extension_to);
+        }
     }
 
     void copy_uninterpreted_options(
@@ -676,6 +682,11 @@ struct protobuf_schema_definition::impl {
         for (auto&& [enum_from, enum_to] :
              boost::combine(from.enum_type(), *to.mutable_enum_type())) {
             copy_uninterpreted_options(enum_from, enum_to);
+        }
+
+        for (auto&& [extension_from, extension_to] :
+             boost::combine(from.extension(), *to.mutable_extension())) {
+            copy_uninterpreted_options(extension_from, extension_to);
         }
 
         for (auto&& [service_from, service_to] :

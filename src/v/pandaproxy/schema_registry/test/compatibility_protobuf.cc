@@ -603,7 +603,7 @@ SEASTAR_THREAD_TEST_CASE(test_protobuf_normalize_custom_options) {
     auto schema = R"(import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.FileOptions {
-  optional string my_file_option_b = 50008;
+  optional string my_file_option_b = 50008 [(my_field_option_b) = 5.5, (my_field_option_a) = 4.5];
   optional string my_file_option_a = 50000;
   repeated uint32 my_repeated_file_option = 60000;
 }
@@ -721,7 +721,10 @@ enum MyEnum {
   BAR = 2;
 }
 extend google.protobuf.FileOptions {
-  optional string my_file_option_b = 50008;
+  optional string my_file_option_b = 50008 [
+    (my_field_option_b) = 5.5,
+    (my_field_option_a) = 4.5
+  ];
   optional string my_file_option_a = 50000;
   repeated uint32 my_repeated_file_option = 60000;
 }
@@ -819,7 +822,10 @@ extend .google.protobuf.FieldOptions {
 }
 extend .google.protobuf.FileOptions {
   optional string my_file_option_a = 50000;
-  optional string my_file_option_b = 50008;
+  optional string my_file_option_b = 50008 [
+    (my_field_option_a) = 4.5,
+    (my_field_option_b) = 5.5
+  ];
   optional string my_file_option_c = 50015;
   repeated uint32 my_repeated_file_option = 60000;
 }
