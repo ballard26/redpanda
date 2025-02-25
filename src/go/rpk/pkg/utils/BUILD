@@ -7,6 +7,7 @@ go_library(
         "collect.go",
         "files.go",
         "os.go",
+        "percentile.go",
         "regex_filter.go",
     ],
     importpath = "github.com/redpanda-data/redpanda/src/go/rpk/pkg/utils",
@@ -22,6 +23,7 @@ go_test(
     size = "small",
     srcs = [
         "files_test.go",
+        "percentile_test.go",
         "regex_filter_test.go",
     ],
     embed = [":utils"],
