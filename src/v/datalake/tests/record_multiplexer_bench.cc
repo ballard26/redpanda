@@ -33,57 +33,6 @@
 
 namespace {
 
-std::string generate_nested_proto_internal(size_t total_depth) {
-    constexpr auto proto_template = R"(
-    message Foo{} {{
-        {} 
-        string a{} = {}; 
-        {}
-    }})";
-
-    if (total_depth == 0) {
-        return "";
-    }
-    std::string member = "";
-    if (total_depth > 1) {
-        member = std::format(
-          "Foo{} b{} = {}; ",
-          total_depth - 1,
-          total_depth,
-          2 * total_depth + 1);
-    }
-    return std::format(
-      proto_template,
-      total_depth,
-      generate_nested_proto_internal(total_depth - 1),
-      total_depth,
-      2 * total_depth,
-      member);
-}
-
-/**
- * Generates a nested protobuf schema.
- *
- * I.e, if total_depth=3 then the following would be generated;
- *
- * syntax = "proto3";
- * message Foo3 {
- *      message Foo2 {
- *          message Foo1 {
- *              string a1 = 2;
- *          }
- *          string a2 = 4;
- *          Foo1 b2 = 5;
- *      }
- *      string a3 = 6;
- *      Foo2 b3 = 7;
- * }
- */
-std::string generate_nested_proto(size_t total_depth) {
-    return std::format(
-      "syntax = \"proto3\"; {}", generate_nested_proto_internal(total_depth));
-}
-
 /**
  * Generates a linear protobuf schema.
  *
@@ -109,88 +58,6 @@ std::string generate_linear_proto(size_t total_fields) {
     }
 
     return std::format(proto_template, fields);
-}
-
-std::string generate_nested_avro_internal(size_t total_depth) {
-    constexpr auto avro_template = R"(
-    {{
-        "name": "nestedval{}",
-        "type": {{
-            "type": "record",
-            "name": "nestedrecord{}",
-            "fields": [
-                {}
-                {}
-            ]
-        }}
-    }})";
-
-    if (total_depth == 0) {
-        return "";
-    }
-
-    std::string string_field = std::format(
-      R"({{ "name": "inval{}", "type": "string" }})", total_depth);
-    if (total_depth != 1) {
-        string_field += ",";
-    };
-
-    return std::format(
-      avro_template,
-      total_depth,
-      total_depth,
-      string_field,
-      generate_nested_avro_internal(total_depth - 1));
-}
-
-/**
- * Generates a nested avro schema;
- *
- * I.e, if total_depth=2 then the following would be generated;
- * {
- *  "name": "base",
- *  "type": "record",
- *  "fields": [
- *	{
- *	  "name": "nestedval2",
- *	  "type": {
- *		"type": "record",
- *		"name": "nestedrecord2",
- *		"fields": [
- *		  {
- *			"name": "inval2",
- *			"type": "string"
- *		  },
- *		  {
- *			"name": "nestedval1",
- *			"type": {
- *			  "type": "record",
- *			  "name": "nestedrecord1",
- *			  "fields": [
- *				{
- *				  "name": "inval1",
- *				  "type": "string"
- *				}
- *			  ]
- *			}
- *		  }
- *		]
- *	  }
- *	}
- *  ]
- *}
- *
- */
-std::string generate_nested_avro(size_t total_depth) {
-    constexpr auto avro_template = R"({{
-    "name": "base",
-    "type": "record",
-    "fields": [
-        {}
-    ]}})";
-
-    return std::format(
-      avro_template, generate_nested_avro_internal(total_depth));
 }
 
 /**
@@ -462,6 +329,7 @@ static constexpr size_t records_per_batch = 10;
 
 } // namespace
 
+
 PERF_TEST_CN(
   record_multiplexer_bench_fixture, protobuf_381_byte_message_linear_1_field) {
     co_await configure_bench(
@@ -473,14 +341,32 @@ PERF_TEST_CN(
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_1_field_zstd) {
+  record_multiplexer_bench_fixture, protobuf_381_byte_message_linear_1_field_2x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{302, 302}},
+      ::testing::protobuf_generator_config{.string_length_range{2*302, 2*302}},
       generate_linear_proto(1),
       batches,
-      records_per_batch,
-      model::compression::zstd);
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture, protobuf_381_byte_message_linear_1_field_3x) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{.string_length_range{2*302, 2*302}},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture, protobuf_381_byte_message_linear_1_field_10x) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{.string_length_range{10*302, 10*302}},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
     co_return co_await run_bench();
 }
 
@@ -497,15 +383,37 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_40_fields_zstd) {
+  protobuf_381_byte_message_linear_40_fields_2x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{5, 5}},
+      ::testing::protobuf_generator_config{.string_length_range{2*5, 2*5}},
       generate_linear_proto(40),
       batches,
-      records_per_batch,
-      model::compression::zstd);
+      records_per_batch);
     co_return co_await run_bench();
 }
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_40_fields_3x) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{.string_length_range{3*5, 3*5}},
+      generate_linear_proto(40),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_40_fields_10x) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{.string_length_range{10*5, 10*5}},
+      generate_linear_proto(40),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
@@ -520,23 +428,21 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_80_fields_zstd) {
+  protobuf_381_byte_message_linear_80_fields_2x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{1, 1}},
+      ::testing::protobuf_generator_config{.string_length_range{2*1, 2*1}},
       generate_linear_proto(80),
       batches,
-      records_per_batch,
-      model::compression::zstd);
+      records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_384_byte_message_nested_24_levels) {
+  protobuf_381_byte_message_linear_80_fields_3x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{
-        .string_length_range{7, 7}, .max_nesting_level = 40},
-      generate_nested_proto(24),
+      ::testing::protobuf_generator_config{.string_length_range{3*1, 3*1}},
+      generate_linear_proto(80),
       batches,
       records_per_batch);
     co_return co_await run_bench();
@@ -544,39 +450,12 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_384_byte_message_nested_24_levels_zstd) {
+  protobuf_381_byte_message_linear_80_fields_10x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{
-        .string_length_range{7, 7}, .max_nesting_level = 40},
-      generate_nested_proto(24),
-      batches,
-      records_per_batch,
-      model::compression::zstd);
-    co_return co_await run_bench();
-}
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture,
-  protobuf_386_byte_message_nested_31_levels) {
-    co_await configure_bench(
-      ::testing::protobuf_generator_config{
-        .string_length_range{4, 4}, .max_nesting_level = 40},
-      generate_nested_proto(31),
+      ::testing::protobuf_generator_config{.string_length_range{10*1, 10*1}},
+      generate_linear_proto(80),
       batches,
       records_per_batch);
-    co_return co_await run_bench();
-}
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture,
-  protobuf_386_byte_message_nested_31_levels_zstd) {
-    co_await configure_bench(
-      ::testing::protobuf_generator_config{
-        .string_length_range{4, 4}, .max_nesting_level = 40},
-      generate_nested_proto(31),
-      batches,
-      records_per_batch,
-      model::compression::zstd);
     co_return co_await run_bench();
 }
 
@@ -591,13 +470,33 @@ PERF_TEST_CN(
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_1_field_zstd) {
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_1_field_2x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{308, 308}},
+      ::testing::avro_generator_config{.string_length_range{2*308, 2*308}},
       generate_linear_avro(1),
       batches,
-      records_per_batch,
-      model::compression::zstd);
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_1_field_3x) {
+    co_await configure_bench(
+      ::testing::avro_generator_config{.string_length_range{3*308, 3*308}},
+      generate_linear_avro(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_1_field_10x) {
+    co_await configure_bench(
+      ::testing::avro_generator_config{.string_length_range{10*308, 10*308}},
+      generate_linear_avro(1),
+      batches,
+      records_per_batch);
     co_return co_await run_bench();
 }
 
@@ -612,14 +511,32 @@ PERF_TEST_CN(
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture,
-  avro_385_byte_message_linear_31_fields_zstd) {
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_31_fields_2x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{9, 9}},
+      ::testing::avro_generator_config{.string_length_range{2*9, 2*9}},
       generate_linear_avro(31),
       batches,
-      records_per_batch,
-      model::compression::zstd);
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_31_fields_3x) {
+    co_await configure_bench(
+      ::testing::avro_generator_config{.string_length_range{3*9, 3*9}},
+      generate_linear_avro(31),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_31_fields_10x) {
+    co_await configure_bench(
+      ::testing::avro_generator_config{.string_length_range{10*9, 10*9}},
+      generate_linear_avro(31),
+      batches,
+      records_per_batch);
     co_return co_await run_bench();
 }
 
@@ -634,61 +551,31 @@ PERF_TEST_CN(
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture,
-  avro_385_byte_message_linear_62_fields_zstd) {
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_62_fields_2x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{4, 4}},
+      ::testing::avro_generator_config{.string_length_range{2*4, 2*4}},
       generate_linear_avro(62),
       batches,
-      records_per_batch,
-      model::compression::zstd);
+      records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_nested_31_levels) {
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_62_fields_3x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{
-        .string_length_range{9, 9}, .max_nesting_level = 40},
-      generate_nested_avro(31),
+      ::testing::avro_generator_config{.string_length_range{3*4, 3*4}},
+      generate_linear_avro(62),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture,
-  avro_385_byte_message_nested_31_levels_zstd) {
+  record_multiplexer_bench_fixture, avro_385_byte_message_linear_62_fields_10x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{
-        .string_length_range{9, 9}, .max_nesting_level = 40},
-      generate_nested_avro(31),
-      batches,
-      records_per_batch,
-      model::compression::zstd);
-    co_return co_await run_bench();
-}
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_nested_62_levels) {
-    co_await configure_bench(
-      ::testing::avro_generator_config{
-        .string_length_range{4, 4}, .max_nesting_level = 40},
-      generate_nested_avro(62),
+      ::testing::avro_generator_config{.string_length_range{10*4, 10*4}},
+      generate_linear_avro(62),
       batches,
       records_per_batch);
-    co_return co_await run_bench();
-}
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture,
-  avro_385_byte_message_nested_62_levels_zstd) {
-    co_await configure_bench(
-      ::testing::avro_generator_config{
-        .string_length_range{4, 4}, .max_nesting_level = 40},
-      generate_nested_avro(62),
-      batches,
-      records_per_batch,
-      model::compression::zstd);
     co_return co_await run_bench();
 }
