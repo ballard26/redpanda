@@ -8,6 +8,7 @@
  * the Business Source License, use of this software will be governed
  * by the Apache License, Version 2.0
  */
+#include "base/vlog.h"
 #include "cloud_io/provider.h"
 #include "container/fragmented_vector.h"
 #include "datalake/catalog_schema_manager.h"
@@ -27,11 +28,29 @@
 #include "storage/parser_utils.h"
 
 #include <seastar/testing/perf_tests.hh>
+#include <seastar/util/log.hh>
 
 #include <optional>
 #include <string_view>
 
 namespace {
+
+[[maybe_unused]]
+std::vector<char> one_out_of(size_t n) {
+    std::vector<char> ret(n, 'a');
+    ret[0] = 'b';
+    return ret;
+}
+
+[[maybe_unused]]
+std::vector<char> n_unique(size_t n) {
+    std::vector<char> ret;
+    ret.reserve(n);
+    for(size_t i = 0; i < n; i++) {
+        ret.push_back((char)i);
+    }
+    return ret;
+}
 
 /**
  * Generates a linear protobuf schema.
@@ -58,52 +77,6 @@ std::string generate_linear_proto(size_t total_fields) {
     }
 
     return std::format(proto_template, fields);
-}
-
-/**
- * Generates a linear avro schema.
- *
- * I.e, if total_fields=3 then the following would be generated;
- * {
- *   "name": "base",
- *   "type": "record",
- *   "fields": [
- *    {
- *      "name": "field0",
- *      "type": "string"
- *    },
- *    {
- *      "name": "field1",
- *      "type": "string"
- *    },
- *    {
- *      "name": "field2",
- *      "type": "string"
- *    }
- *  ]
- * }
- *
- */
-std::string generate_linear_avro(size_t total_fields) {
-    constexpr auto avro_template = R"({{
-    "name": "base",
-    "type": "record",
-    "fields": [
-        {}
-    ]}})";
-    constexpr auto field_template
-      = R"({{ "name": "field{}", "type": "string" }})";
-    std::string ret = "";
-
-    for (size_t i = 0; i < total_fields; i++) {
-        ret += std::format(field_template, i);
-        if (i != total_fields - 1) {
-            ret += ",";
-        }
-    }
-
-    ret = std::format(avro_template, ret);
-    return ret;
 }
 
 chunked_vector<model::record_batch>
@@ -133,6 +106,26 @@ struct counting_consumer {
     }
 };
 
+struct decompressing_consumer {
+    size_t total_compressed_bytes = 0;
+    size_t total_decompressed_bytes = 0;
+
+    ss::future<ss::stop_iteration> operator()(model::record_batch batch) {
+        total_compressed_bytes += batch.size_bytes();
+        if (batch.compressed()) {
+            batch = co_await storage::internal::decompress_batch(
+              std::move(batch));
+        }
+        total_decompressed_bytes += batch.size_bytes();
+        co_return ss::stop_iteration::no;
+    }
+    ss::future<decompressing_consumer> end_of_stream() {
+        co_return std::move(*this);
+    }
+};
+
+ss::logger tlogger("rmb");
+
 } // namespace
 
 class record_multiplexer_bench_fixture
@@ -153,7 +146,7 @@ public:
       std::string schema,
       size_t batches,
       size_t records_per_batch,
-      model::compression compression_type = model::compression::none) {
+      model::compression compression_type = model::compression::zstd) {
         if constexpr (std::is_same_v<T, ::testing::protobuf_generator_config>) {
             _batch_data = co_await generate_protobuf_batches(
               records_per_batch,
@@ -177,14 +170,19 @@ public:
     ss::future<size_t> run_bench() {
         auto reader = model::make_fragmented_memory_record_batch_reader(
           share_batches(_batch_data));
-        auto consumer = counting_consumer{.mux = create_mux(), .as = _as};
-
+        auto consumer = decompressing_consumer{};
+        
         perf_tests::start_measuring_time();
         auto res = co_await reader.consume(
           std::move(consumer), model::no_timeout);
         perf_tests::stop_measuring_time();
 
-        co_return res.total_bytes;
+        vlog(
+          tlogger.error,
+          "compression ratio: {}",
+          (float)res.total_decompressed_bytes / res.total_compressed_bytes);
+
+        co_return res.total_decompressed_bytes;
     }
 
 private:
@@ -319,51 +317,16 @@ private:
 namespace {
 
 // Specifies how many batches should be in the test dataset.
-#ifdef NDEBUG
 static constexpr size_t batches = 1000;
-#else
-static constexpr size_t batches = 1;
-#endif
 // Specifies how many records should be in each batch of the test dataset.
-static constexpr size_t records_per_batch = 10;
+static constexpr size_t records_per_batch = 1;
 
 } // namespace
-
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture, protobuf_381_byte_message_linear_1_field) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{302, 302}},
-      generate_linear_proto(1),
-      batches,
-      records_per_batch);
-    co_return co_await run_bench();
-}
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture, protobuf_381_byte_message_linear_1_field_2x) {
-    co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{2*302, 2*302}},
-      generate_linear_proto(1),
-      batches,
-      records_per_batch);
-    co_return co_await run_bench();
-}
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture, protobuf_381_byte_message_linear_1_field_3x) {
-    co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{2*302, 2*302}},
-      generate_linear_proto(1),
-      batches,
-      records_per_batch);
-    co_return co_await run_bench();
-}
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture, protobuf_381_byte_message_linear_1_field_10x) {
-    co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{10*302, 10*302}},
+      ::testing::protobuf_generator_config{.string_length_range{302, 302}, .string_characters=n_unique(1)},
       generate_linear_proto(1),
       batches,
       records_per_batch);
@@ -372,10 +335,10 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_40_fields) {
+  protobuf_381_byte_message_linear_1_field_1_5x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{5, 5}},
-      generate_linear_proto(40),
+      ::testing::protobuf_generator_config{.string_length_range{453, 453}, .string_characters=n_unique(2)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
@@ -383,10 +346,11 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_40_fields_2x) {
+  protobuf_381_byte_message_linear_1_field_2x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{2*5, 2*5}},
-      generate_linear_proto(40),
+      ::testing::protobuf_generator_config{
+        .string_length_range{2 * 302, 2 * 302}, .string_characters=n_unique(3)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
@@ -394,10 +358,11 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_40_fields_3x) {
+  protobuf_381_byte_message_linear_1_field_3x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{3*5, 3*5}},
-      generate_linear_proto(40),
+      ::testing::protobuf_generator_config{
+        .string_length_range{3 * 302, 3 * 302}, .string_characters=n_unique(4)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
@@ -405,22 +370,11 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_40_fields_10x) {
+  protobuf_381_byte_message_linear_1_field_4x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{10*5, 10*5}},
-      generate_linear_proto(40),
-      batches,
-      records_per_batch);
-    co_return co_await run_bench();
-}
-
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_80_fields) {
-    co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{1, 1}},
-      generate_linear_proto(80),
+      ::testing::protobuf_generator_config{
+        .string_length_range{4 * 302, 4 * 302}, .string_characters=n_unique(5)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
@@ -428,10 +382,11 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_80_fields_2x) {
+  protobuf_381_byte_message_linear_1_field_5x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{2*1, 2*1}},
-      generate_linear_proto(80),
+      ::testing::protobuf_generator_config{
+        .string_length_range{5 * 302, 5 * 302}, .string_characters=n_unique(5)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
@@ -439,10 +394,11 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_80_fields_3x) {
+  protobuf_381_byte_message_linear_1_field_6x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{3*1, 3*1}},
-      generate_linear_proto(80),
+      ::testing::protobuf_generator_config{
+        .string_length_range{6 * 302, 6 * 302}, .string_characters=n_unique(5)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
@@ -450,132 +406,256 @@ PERF_TEST_CN(
 
 PERF_TEST_CN(
   record_multiplexer_bench_fixture,
-  protobuf_381_byte_message_linear_80_fields_10x) {
+  protobuf_381_byte_message_linear_1_field_7x) {
     co_await configure_bench(
-      ::testing::protobuf_generator_config{.string_length_range{10*1, 10*1}},
-      generate_linear_proto(80),
+      ::testing::protobuf_generator_config{
+        .string_length_range{7 * 302, 7 * 302}, .string_characters=n_unique(6)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_1_field) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_8x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{308, 308}},
-      generate_linear_avro(1),
+      ::testing::protobuf_generator_config{
+        .string_length_range{8 * 302, 8 * 302}, .string_characters=n_unique(6)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_1_field_2x) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_9x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{2*308, 2*308}},
-      generate_linear_avro(1),
-      batches,
-      records_per_batch);
-    co_return co_await run_bench();
-}
-
-
-PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_1_field_3x) {
-    co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{3*308, 3*308}},
-      generate_linear_avro(1),
+      ::testing::protobuf_generator_config{
+        .string_length_range{9 * 302, 9 * 302}, .string_characters=n_unique(6)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_1_field_10x) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_10x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{10*308, 10*308}},
-      generate_linear_avro(1),
+      ::testing::protobuf_generator_config{
+        .string_length_range{10 * 302, 10 * 302}, .string_characters=n_unique(6)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_31_fields) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_15x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{9, 9}},
-      generate_linear_avro(31),
+      ::testing::protobuf_generator_config{
+        .string_length_range{15 * 302, 15 * 302}, .string_characters=n_unique(7)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_31_fields_2x) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_20x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{2*9, 2*9}},
-      generate_linear_avro(31),
+      ::testing::protobuf_generator_config{
+        .string_length_range{20 * 302, 20 * 302}, .string_characters=n_unique(7)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_31_fields_3x) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_40x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{3*9, 3*9}},
-      generate_linear_avro(31),
+      ::testing::protobuf_generator_config{
+        .string_length_range{40 * 302, 40 * 302}, .string_characters=n_unique(7)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_31_fields_10x) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_80x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{10*9, 10*9}},
-      generate_linear_avro(31),
+      ::testing::protobuf_generator_config{
+        .string_length_range{80 * 302, 80 * 302}, .string_characters=n_unique(8)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_62_fields) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_160x) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{4, 4}},
-      generate_linear_avro(62),
+      ::testing::protobuf_generator_config{
+        .string_length_range{160 * 302, 160 * 302}, .string_characters=n_unique(8)},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+/*
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_4_uniq) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = n_unique(4)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_62_fields_2x) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_6_uniq) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{2*4, 2*4}},
-      generate_linear_avro(62),
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = n_unique(6)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_62_fields_3x) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_8_uniq) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{3*4, 3*4}},
-      generate_linear_avro(62),
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = n_unique(8)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
 
 PERF_TEST_CN(
-  record_multiplexer_bench_fixture, avro_385_byte_message_linear_62_fields_10x) {
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_10_uniq) {
     co_await configure_bench(
-      ::testing::avro_generator_config{.string_length_range{10*4, 10*4}},
-      generate_linear_avro(62),
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = n_unique(10)},
+      generate_linear_proto(1),
       batches,
       records_per_batch);
     co_return co_await run_bench();
 }
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_20_uniq) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = n_unique(20)},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_1_2_b) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = {'a', 'b',}},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_1_5_b) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = one_out_of(5)},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_1_10_b) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = one_out_of(10)},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_1_15_b) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = one_out_of(15)},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_1_20_b) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = one_out_of(20)},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_1_40_b) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302},
+        .string_characters = one_out_of(40),
+      },
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+
+PERF_TEST_CN(
+  record_multiplexer_bench_fixture,
+  protobuf_381_byte_message_linear_1_field_0_b) {
+    co_await configure_bench(
+      ::testing::protobuf_generator_config{
+        .string_length_range{15*302, 15*302}, .string_characters = {'a'}},
+      generate_linear_proto(1),
+      batches,
+      records_per_batch);
+    co_return co_await run_bench();
+}
+*/

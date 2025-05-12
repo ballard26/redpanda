@@ -24,6 +24,7 @@ namespace testing {
 struct protobuf_generator_config {
     std::optional<size_t> elements_in_collection{};
     std::pair<size_t, size_t> string_length_range{0, 32};
+    std::vector<char> string_characters{};
     int max_nesting_level{10};
     // Enable randomly not setting values for optional fields in the message.
     bool randomize_optional_fields{false};

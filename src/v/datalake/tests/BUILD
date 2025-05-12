@@ -284,6 +284,7 @@ redpanda_cc_bench(
         "//src/v/datalake:record_schema_resolver",
         "//src/v/datalake:record_translator",
         "//src/v/datalake:table_creator",
+        "//src/v/base",
         "//src/v/model",
         "//src/v/serde/avro/tests:data_generator",
         "//src/v/serde/protobuf/tests:data_generator",

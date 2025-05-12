@@ -19,8 +19,19 @@
 namespace testing {
 ss::sstring random_string(const protobuf_generator_config& config) {
     auto [min, max] = config.string_length_range;
-    return random_generators::gen_alphanum_string(
-      random_generators::get_int(min, max));
+    if(config.string_characters.empty()) {
+        return random_generators::gen_alphanum_string(
+          random_generators::get_int(min, max));
+    } else {
+        ss::sstring s{};
+        size_t s_len = random_generators::get_int(min, max);
+
+        for(size_t i=0; i < s_len; i++) {
+            s.append(&random_generators::random_choice(config.string_characters), 1);
+        }
+
+        return s;
+    }
 }
 
 std::unique_ptr<google::protobuf::Message>
