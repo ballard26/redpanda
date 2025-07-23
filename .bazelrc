@@ -139,9 +139,20 @@ build:release --compilation_mode opt
 build:release --config=secure
 build:release --copt -mllvm --copt -inline-threshold=2500
 build:release --@seastar//:stack_guards=False --@seastar//:debug=False
-build:release --//src/v/redpanda:lto=True
-build:release --copt -flto=thin --copt -ffat-lto-objects
+# build:release --//src/v/redpanda:lto=True
+# build:release --copt -flto=thin --copt -ffat-lto-objects
 build:release --copt -g --strip=never
+
+build:release --copt -fsanitize=address
+build:release --linkopt -fsanitize=address
+build:release --linkopt -fsanitize-link-c++-runtime
+build:release --copt -mllvm --copt -asan-stack=0
+build:release --//bazel:has_sanitizers=True
+# seastar has to be run with system allocator when using sanitizers
+build:release --@seastar//:system_allocator=True
+# krb5 is a foreign cc build and needs explicit list of sanitizers to build the shared library
+build:release --@krb5//:sanitizers=address
+
 
 build:stamp --stamp --workspace_status_command=./bazel/stamp_vars.sh
 build:stamp-full --stamp --workspace_status_command='./bazel/stamp_vars.sh full'
