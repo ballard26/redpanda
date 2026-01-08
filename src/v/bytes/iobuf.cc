@@ -197,8 +197,8 @@ std::strong_ordering iobuf::operator<=>(const iobuf& o) const {
                 rhs.remove_prefix(n);
                 if (rhs.empty()) {
                     rhs = other_next_view();
-                    if (o_it == o.cend()) {
-                        break;
+                    if (rhs.empty()) {
+                        return _size <=> o._size;
                     }
                 }
             }
