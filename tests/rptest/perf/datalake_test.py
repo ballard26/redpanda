@@ -6,18 +6,17 @@
 # As of the Change Date specified in that file, in accordance with
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
+import json
 import random
 import string
 from typing import Any, cast
 
 from confluent_kafka.schema_registry import SchemaRegistryClient
-from confluent_kafka.schema_registry.protobuf import ProtobufSerializer
+from confluent_kafka.schema_registry.avro import AvroSerializer
 from confluent_kafka.serialization import MessageField, SerializationContext
 from ducktape.mark import matrix
 from ducktape.tests.test import TestContext
-from google.protobuf.message import Message
 
-import rptest.tests.datalake.schemas.linear_pb2 as linear_pb2
 from rptest.services.cluster import cluster
 from rptest.services.utils import LocalPayloadDirectory
 from rptest.services.openmessaging_benchmark import OpenMessagingBenchmark
@@ -27,6 +26,21 @@ from rptest.tests.datalake.catalog_service_factory import filesystem_catalog_typ
 from rptest.tests.datalake.datalake_services import DatalakeServices
 from rptest.tests.datalake.utils import supported_storage_types
 from rptest.tests.redpanda_test import RedpandaTest
+
+
+def _make_linear_avro_schema(num_fields: int) -> str:
+    """Generate an Avro schema with num_fields string fields named a1, a2, ..., aN."""
+    fields = [{"name": f"a{i}", "type": "string"} for i in range(1, num_fields + 1)]
+    schema = {
+        "type": "record",
+        "namespace": "com.redpanda.examples.avro",
+        "name": f"Linear{num_fields}",
+        "fields": fields,
+    }
+    return json.dumps(schema)
+
+
+LINEAR20_AVRO_SCHEMA = _make_linear_avro_schema(20)
 
 
 class DatalakeTest(RedpandaTest):
@@ -55,15 +69,12 @@ class DatalakeTest(RedpandaTest):
 
         return SchemaRegistryClient(schema_registry_conf)
 
-    def _random_linear_msg(self, msg_type: Any, str_len: int) -> Message:
-        """For a protobuf message of `msg_type` which is just a linear list of string fields generate a random message."""
-        msg_descriptor: Any = msg_type.DESCRIPTOR
-        msg: Message = msg_type()
-        fields: list[str] = list(msg_descriptor.fields_by_name.keys())
-        for field in fields:
+    def _random_linear_msg(self, num_fields: int, str_len: int) -> dict[str, str]:
+        """Generate a random message dict with num_fields string fields named a1, a2, ..., aN."""
+        msg: dict[str, str] = {}
+        for i in range(1, num_fields + 1):
             random_str = "".join(random.choices(string.ascii_letters, k=str_len))
-            setattr(msg, field, random_str)
-
+            msg[f"a{i}"] = random_str
         return msg
 
     @cluster(num_nodes=6)
@@ -73,7 +84,7 @@ class DatalakeTest(RedpandaTest):
         topic_partitions = 50
         producer_rate_bytes_s = 40 * 1024 * 1024
 
-        msg_type = linear_pb2.Linear20
+        num_fields = 20
         msg_field_size_bytes = 13
         total_unique_messages = 100
 
@@ -94,17 +105,17 @@ class DatalakeTest(RedpandaTest):
             schema_registry_client = self._get_schema_registry_client()
 
             payloads = LocalPayloadDirectory()
-            # Note that `ps` is used to serialize the message and register it's schema with Redpanda's schema registry.
-            ps = ProtobufSerializer(
-                msg_type, schema_registry_client, {"use.deprecated.format": False}
+            # Note that `avro_serializer` is used to serialize the message and register its schema with Redpanda's schema registry.
+            avro_serializer = AvroSerializer(
+                schema_registry_client, LINEAR20_AVRO_SCHEMA
             )
 
             payload_size = 0
             for i in range(0, total_unique_messages):
-                msg: Message = self._random_linear_msg(msg_type, msg_field_size_bytes)
+                msg: dict[str, str] = self._random_linear_msg(num_fields, msg_field_size_bytes)
                 msg_bytes: bytes = cast(
                     bytes,
-                    ps(msg, SerializationContext(topic_name, MessageField.VALUE)),
+                    avro_serializer(msg, SerializationContext(topic_name, MessageField.VALUE)),
                 )
                 payload_size = len(msg_bytes)
                 payloads.add_payload(f"message_{i}", msg_bytes)
