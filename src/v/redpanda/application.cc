@@ -46,6 +46,7 @@
 #include "storage/api.h"
 #include "storage/directories.h"
 #include "syschecks/syschecks.h"
+#include "tracing/span_manager.h"
 #include "utils/file_io.h"
 #include "utils/human.h"
 #include "version/version.h"
@@ -425,6 +426,8 @@ void application::initialize(
       }))
       .get();
     _cpu_profiler.invoke_on_all(&resources::cpu_profiler::start).get();
+
+    construct_service(span_mgr).get();
 
     /*
      * Disable the logger for protobuf; some interfaces don't allow a pluggable

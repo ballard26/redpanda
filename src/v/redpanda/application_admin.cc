@@ -21,6 +21,7 @@
 #include "redpanda/admin/services/internal/shadow_link_internal.h"
 #include "redpanda/admin/services/security.h"
 #include "redpanda/admin/services/shadow_link/shadow_link.h"
+#include "redpanda/admin/services/tracing.h"
 #include "redpanda/application.h"
 #include "resource_mgmt/memory_groups.h"
 #include "resource_mgmt/scheduling_groups_probe.h"
@@ -127,6 +128,8 @@ void application::configure_admin_server(model::node_id node_id) {
               controller.get(),
               _kafka_server.ref(),
               std::ref(metadata_cache)));
+          s.add_service(
+            std::make_unique<admin::tracing_service_impl>(span_mgr));
       })
       .get();
 }

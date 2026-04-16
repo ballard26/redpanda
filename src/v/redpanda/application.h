@@ -59,6 +59,7 @@
 #include "rpc/rpc_server.h"
 #include "ssx/sharded_service_container.h"
 #include "storage/api.h"
+#include "tracing/fwd.h"
 #include "transform/fwd.h"
 #include "utils/stop_signal.h"
 #include "wasm/fwd.h"
@@ -179,6 +180,8 @@ public:
     ss::sharded<kafka::usage_manager> usage_manager;
 
     ss::sharded<security::audit::audit_log_manager> audit_mgr;
+
+    ss::sharded<tracing::span_manager> span_mgr;
 
     ss::sharded<raft::group_manager> raft_group_manager;
     ss::sharded<raft::coordinated_recovery_throttle> recovery_throttle;
