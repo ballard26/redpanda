@@ -69,6 +69,15 @@ message TracingConfig {
     uint32 buffer_size = 3;
     uint32 flush_interval_ms = 4;
     SpanLimits limits = 5;
+    ExporterConfig exporter = 6;
+}
+
+message ExporterConfig {
+    string endpoint_host = 1;
+    uint32 endpoint_port = 2;
+    string path = 3;
+    string auth_header = 4;
+    uint32 timeout_ms = 5;
 }
 
 message SamplingConfig {

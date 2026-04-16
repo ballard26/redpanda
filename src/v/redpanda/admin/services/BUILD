@@ -54,6 +54,7 @@ redpanda_cc_library(
     deps = [
         "//proto/redpanda/core/admin/v2:tracing_redpanda_proto",
         "//src/v/serde/protobuf:rpc",
+        "//src/v/tracing:otlp_exporter",
         "//src/v/tracing:span_manager",
         "//src/v/tracing:types",
         "@seastar",

@@ -11,10 +11,12 @@
 
 #include "redpanda/admin/services/tracing.h"
 
+#include "tracing/otlp_exporter.h"
 #include "tracing/scope.h"
 #include "tracing/span_manager.h"
 
 #include <seastar/core/coroutine.hh>
+#include <seastar/core/shard_id.hh>
 
 namespace proto {
 using namespace proto::admin;
@@ -103,6 +105,26 @@ from_proto_config(const proto::admin::tracing_config& pc) {
     return cfg;
 }
 
+std::optional<tracing::exporter_config>
+exporter_config_from_proto(const proto::admin::tracing_config& pc) {
+    const auto& pe = pc.get_exporter();
+    if (pe.get_endpoint_host().empty()) {
+        return std::nullopt;
+    }
+    return tracing::exporter_config{
+      .endpoint = net::unresolved_address(
+        ss::sstring{pe.get_endpoint_host()},
+        pe.get_endpoint_port() > 0
+          ? static_cast<uint16_t>(pe.get_endpoint_port())
+          : uint16_t{4318}),
+      .path = pe.get_path().empty() ? ss::sstring{"/v1/traces"}
+                                    : ss::sstring{pe.get_path()},
+      .auth_header = ss::sstring{pe.get_auth_header()},
+      .timeout = std::chrono::milliseconds(
+        pe.get_timeout_ms() > 0 ? pe.get_timeout_ms() : 2000),
+    };
+}
+
 // Convert span_manager::config to proto TracingConfig
 proto::admin::tracing_config
 to_proto_config(const tracing::span_manager::config& cfg) {
@@ -153,8 +175,12 @@ tracing_service_impl::get_tracing_config(
 ss::future<proto::admin::update_tracing_config_response>
 tracing_service_impl::update_tracing_config(
   serde::pb::rpc::context, proto::admin::update_tracing_config_request req) {
-    // Convert on each shard to avoid cross-shard move of non-copyable config
     auto proto_cfg = std::move(req.get_config());
+
+    // Parse exporter config before dispatching (shard 0 only)
+    auto exp_cfg = exporter_config_from_proto(proto_cfg);
+
+    // Dispatch span_manager config to all shards
     auto proto_buf = co_await proto_cfg.to_proto();
     co_await _span_manager.invoke_on_all(
       [&proto_buf](tracing::span_manager& sm) -> ss::future<> {
@@ -162,6 +188,15 @@ tracing_service_impl::update_tracing_config(
             proto_buf.copy());
           sm.update_config(from_proto_config(pc));
       });
+
+    if (exp_cfg) {
+        co_await _span_manager.invoke_on(
+          0, [&exp_cfg](tracing::span_manager& sm) {
+              return sm.set_exporter(
+                std::make_unique<tracing::otlp_exporter>(*exp_cfg));
+          });
+    }
+
     co_return proto::admin::update_tracing_config_response{};
 }
 
