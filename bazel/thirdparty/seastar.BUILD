@@ -20,6 +20,11 @@ bool_flag(
 )
 
 bool_flag(
+    name = "task_context",
+    build_setting_default = True,
+)
+
+bool_flag(
     name = "heap_profiling",
     build_setting_default = True,
 )
@@ -103,6 +108,13 @@ config_setting(
     name = "use_task_backtrace",
     flag_values = {
         ":task_backtrace": "true",
+    },
+)
+
+config_setting(
+    name = "use_task_context",
+    flag_values = {
+        ":task_context": "true",
     },
 )
 
@@ -332,6 +344,7 @@ cc_library(
         "include/seastar/core/circular_buffer.hh",
         "include/seastar/core/circular_buffer_fixed_capacity.hh",
         "include/seastar/core/condition-variable.hh",
+        "include/seastar/core/with_context.hh",
         "include/seastar/core/coroutine.hh",
         "include/seastar/core/deleter.hh",
         "include/seastar/core/disk_params.hh",
@@ -576,6 +589,9 @@ cc_library(
         "SEASTAR_DEPRECATED_OSTREAM_FORMATTERS",
     ] + select({
         ":use_task_backtrace": ["SEASTAR_TASK_BACKTRACE"],
+        "//conditions:default": [],
+    }) + select({
+        ":use_task_context": ["SEASTAR_TASK_CONTEXT"],
         "//conditions:default": [],
     }) + select({
         ":use_sstring": ["SEASTAR_SSTRING"],

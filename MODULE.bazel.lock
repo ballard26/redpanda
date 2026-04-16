@@ -304,7 +304,7 @@
   "moduleExtensions": {
     "//bazel:extensions.bzl%non_module_dependencies": {
       "general": {
-        "bzlTransitiveDigest": "wLKvpZbW0I9xXgkrj1e5pRqR6N6bLiXc2VZIyW0KEr8=",
+        "bzlTransitiveDigest": "VhK7UBXbV6w7O4wQ+05M4KbJCx3F3sbRBhWhBeONvIw=",
         "usagesDigest": "FEiDyZe9eAU6yEqnarZf0XMEUk+prUyYClvq1RU1J98=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -485,9 +485,9 @@
             "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
             "attributes": {
               "build_file": "@@//bazel/thirdparty:seastar.BUILD",
-              "sha256": "9c572c5111ef6b4f0afc6ba358696c0e2a78e118bc3c3617cf6454a9d98970de",
-              "strip_prefix": "seastar-617d3c421a949f449942d7ce0d275af0997efb48",
-              "url": "https://github.com/redpanda-data/seastar/archive/617d3c421a949f449942d7ce0d275af0997efb48.tar.gz"
+              "sha256": "670bf5bdf031eb8a23b38de31580ef368bd76df0bea46be1f0e0280ccbefa7f3",
+              "strip_prefix": "seastar-b96f47bb217afb84ab1cf77e0d8823b6c85345e3",
+              "url": "https://github.com/redpanda-data/seastar/archive/b96f47bb217afb84ab1cf77e0d8823b6c85345e3.tar.gz"
             }
           },
           "unordered_dense": {
