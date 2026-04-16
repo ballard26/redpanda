@@ -48,6 +48,19 @@ redpanda_cc_library(
 )
 
 redpanda_cc_library(
+    name = "tracing",
+    srcs = ["tracing.cc"],
+    hdrs = ["tracing.h"],
+    deps = [
+        "//proto/redpanda/core/admin/v2:tracing_redpanda_proto",
+        "//src/v/serde/protobuf:rpc",
+        "//src/v/tracing:span_manager",
+        "//src/v/tracing:types",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_library(
     name = "security",
     srcs = ["security.cc"],
     hdrs = ["security.h"],

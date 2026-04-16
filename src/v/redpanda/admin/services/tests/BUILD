@@ -1,6 +1,24 @@
 load("//bazel:test.bzl", "redpanda_cc_gtest")
 
 redpanda_cc_gtest(
+    name = "tracing_test",
+    timeout = "short",
+    srcs = [
+        "tracing_test.cc",
+    ],
+    deps = [
+        "//proto/redpanda/core/admin/v2:tracing_redpanda_proto",
+        "//src/v/redpanda/admin/services:tracing",
+        "//src/v/serde/protobuf:rpc",
+        "//src/v/test_utils:gtest",
+        "//src/v/tracing:span_manager",
+        "//src/v/tracing:types",
+        "@googletest//:gtest",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_gtest(
     name = "security_test",
     timeout = "short",
     srcs = [
