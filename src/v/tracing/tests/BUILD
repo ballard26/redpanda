@@ -1,5 +1,5 @@
 load("//bazel:build.bzl", "redpanda_cc_library")
-load("//bazel:test.bzl", "redpanda_cc_gtest")
+load("//bazel:test.bzl", "redpanda_cc_bench", "redpanda_cc_gtest")
 
 redpanda_cc_library(
     name = "test_span",
@@ -84,5 +84,21 @@ redpanda_cc_gtest(
         "//src/v/tracing:types",
         "@googletest//:gtest",
         "@seastar",
+    ],
+)
+
+redpanda_cc_bench(
+    name = "tracing_rpbench",
+    srcs = [
+        "tracing_rpbench.cc",
+    ],
+    deps = [
+        "//src/v/tracing:span_attrs",
+        "//src/v/tracing:span_guard",
+        "//src/v/tracing:span_manager",
+        "//src/v/tracing:trace",
+        "//src/v/tracing:types",
+        "@seastar",
+        "@seastar//:benchmark",
     ],
 )
