@@ -102,3 +102,19 @@ redpanda_cc_bench(
         "@seastar//:benchmark",
     ],
 )
+
+redpanda_cc_bench(
+    name = "serialization_rpbench",
+    srcs = [
+        "serialization_rpbench.cc",
+    ],
+    deps = [
+        ":test_span",
+        "//src/v/bytes:iobuf",
+        "//src/v/tracing:serialization",
+        "//src/v/tracing:trace",
+        "//src/v/tracing:types",
+        "@seastar",
+        "@seastar//:benchmark",
+    ],
+)
