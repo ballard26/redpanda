@@ -128,3 +128,25 @@ redpanda_cc_library(
         "@seastar",
     ],
 )
+
+redpanda_cc_library(
+    name = "otlp_exporter",
+    srcs = [
+        "otlp_exporter.cc",
+    ],
+    hdrs = [
+        "otlp_exporter.h",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":logger",
+        ":span_manager",
+        "//src/v/base",
+        "//src/v/http",
+        "//src/v/net",
+        "//src/v/utils:prefix_logger",
+        "//src/v/utils:unresolved_address",
+        "@fmt",
+        "@seastar",
+    ],
+)

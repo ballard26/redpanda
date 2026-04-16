@@ -1,5 +1,5 @@
 load("//bazel:build.bzl", "redpanda_cc_library")
-load("//bazel:test.bzl", "redpanda_cc_bench", "redpanda_cc_gtest")
+load("//bazel:test.bzl", "redpanda_cc_bench", "redpanda_cc_btest", "redpanda_cc_gtest")
 
 redpanda_cc_library(
     name = "test_span",
@@ -83,6 +83,29 @@ redpanda_cc_gtest(
         "//src/v/tracing:trace",
         "//src/v/tracing:types",
         "@googletest//:gtest",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_btest(
+    name = "otlp_exporter_test",
+    timeout = "short",
+    srcs = [
+        "otlp_exporter_test.cc",
+    ],
+    cpu = 1,
+    deps = [
+        ":test_span",
+        "//proto/opentelemetry/proto/collector/trace/v1:trace_service_cc_proto",
+        "//src/v/bytes:iobuf",
+        "//src/v/bytes:iobuf_parser",
+        "//src/v/http/tests:utils",
+        "//src/v/test_utils:seastar_boost",
+        "//src/v/tracing:otlp_exporter",
+        "//src/v/tracing:serialization",
+        "//src/v/tracing:trace",
+        "//src/v/tracing:types",
+        "@boost//:test",
         "@seastar",
     ],
 )

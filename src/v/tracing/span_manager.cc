@@ -12,6 +12,7 @@
 #include "tracing/span_manager.h"
 
 #include "base/seastarx.h"
+#include "base/vassert.h"
 #include "base/vlog.h"
 #include "bytes/iobuf.h"
 #include "container/chunked_circular_buffer.h"
@@ -186,6 +187,10 @@ span_manager::~span_manager() = default;
 
 ss::future<>
 span_manager::set_exporter(std::unique_ptr<span_exporter> exporter) {
+    vassert(
+      ss::this_shard_id() == 0,
+      "set_exporter must be called on shard 0, got {}",
+      ss::this_shard_id());
     if (_impl->exporter) {
         co_await _impl->exporter->stop();
     }
