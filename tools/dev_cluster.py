@@ -336,6 +336,124 @@ class Prometheus:
         return await self.process.wait()
 
 
+class Tempo:
+    """Grafana Tempo — receives OTLP/HTTP traces on otlp_port and serves
+    the HTTP API on api_port. Generates a minimal local-storage config.
+    """
+
+    def __init__(
+        self,
+        binary: Path,
+        directory: Path,
+        listen_address: str = "127.0.0.1",
+        api_port: int = 3200,
+        otlp_port: int = 4318,
+    ) -> None:
+        self.binary = binary
+        self.directory = directory
+        self.stopped = False
+        self.listen_address = listen_address
+        self.api_port = api_port
+        self.otlp_port = otlp_port
+        self.process: asyncio.subprocess.Process
+
+    def stop(self) -> None:
+        if not self.stopped:
+            self.stopped = True
+            send_signal(self.process, signal.SIGINT, "tempo")
+
+    async def run(self) -> int:
+        log_path = self.directory / "tempo.log"
+        data_dir = self.directory / "data"
+        wal_dir = data_dir / "wal"
+        blocks_dir = data_dir / "blocks"
+        gen_wal_dir = data_dir / "generator-wal"
+        gen_traces_dir = data_dir / "generator-traces"
+        for d in (data_dir, wal_dir, blocks_dir, gen_wal_dir, gen_traces_dir):
+            d.mkdir(parents=True, exist_ok=True)
+
+        config = {
+            "server": {
+                "http_listen_address": self.listen_address,
+                "http_listen_port": self.api_port,
+                "grpc_listen_address": self.listen_address,
+                "grpc_listen_port": self.api_port + 1,
+            },
+            "distributor": {
+                "receivers": {
+                    "otlp": {
+                        "protocols": {
+                            "http": {
+                                "endpoint": f"{self.listen_address}:{self.otlp_port}",
+                            },
+                        },
+                    },
+                },
+            },
+            "storage": {
+                "trace": {
+                    "backend": "local",
+                    "local": {
+                        "path": str(blocks_dir),
+                    },
+                    "wal": {
+                        "path": str(wal_dir),
+                    },
+                },
+            },
+            # metrics-generator with local-blocks lets Tempo serve TraceQL
+            # metric queries (rate/count_over_time/etc) without needing an
+            # external Prometheus remote-write endpoint.
+            "metrics_generator": {
+                "processor": {
+                    "local_blocks": {
+                        "flush_to_storage": True,
+                    },
+                },
+                "registry": {
+                    "external_labels": {"source": "tempo"},
+                },
+                "storage": {
+                    "path": str(gen_wal_dir),
+                },
+                "traces_storage": {
+                    "path": str(gen_traces_dir),
+                },
+            },
+            "overrides": {
+                "defaults": {
+                    "metrics_generator": {
+                        "processors": ["local-blocks"],
+                    },
+                },
+            },
+            "usage_report": {
+                "reporting_enabled": False,
+            },
+        }
+
+        config_file = self.directory / "tempo.yaml"
+        with open(config_file, "w") as f:
+            yaml_dump(config, f)
+
+        args = [str(self.binary), f"-config.file={config_file}"]
+        print(f"Running: {' '.join(args)}")
+        print(
+            f"Tempo API: http://{self.listen_address}:{self.api_port}, "
+            f"OTLP/HTTP: http://{self.listen_address}:{self.otlp_port}"
+        )
+
+        self.process = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+
+        await stream_until_eof(self.process, "tempo", False, log_path)
+
+        return await self.process.wait()
+
+
 class Grafana:
     def __init__(
         self,
@@ -343,6 +461,7 @@ class Grafana:
         directory: Path,
         port: int,
         prometheus_url: str | None = None,
+        tempo_url: str | None = None,
         scrape_interval: str = "5s",
     ) -> None:
         self.binary = binary
@@ -350,6 +469,7 @@ class Grafana:
         self.stopped = False
         self.port = port
         self.prometheus_url = prometheus_url
+        self.tempo_url = tempo_url
         self.scrape_interval = scrape_interval
         self.process: asyncio.subprocess.Process
 
@@ -376,32 +496,44 @@ class Grafana:
             elif not src.exists():
                 print(f"Warning: Could not find {src}")
 
-        # Configure Prometheus as a datasource via provisioning
-        if self.prometheus_url:
+        # Configure datasources (Prometheus and/or Tempo) via provisioning
+        if self.prometheus_url or self.tempo_url:
             provisioning_dir = grafana_home / "conf" / "provisioning" / "datasources"
             provisioning_dir.mkdir(parents=True, exist_ok=True)
 
+            datasources: list[dict[str, Any]] = []
+            if self.prometheus_url:
+                datasources.append({
+                    "name": "Prometheus",
+                    "type": "prometheus",
+                    "access": "proxy",
+                    "url": self.prometheus_url,
+                    "isDefault": True,
+                    "editable": True,
+                    "jsonData": {
+                        "timeInterval": self.scrape_interval,
+                    },
+                })
+                print(f"Configured Prometheus datasource at {self.prometheus_url}")
+            if self.tempo_url:
+                datasources.append({
+                    "name": "Tempo",
+                    "type": "tempo",
+                    "access": "proxy",
+                    "url": self.tempo_url,
+                    "isDefault": not self.prometheus_url,
+                    "editable": True,
+                })
+                print(f"Configured Tempo datasource at {self.tempo_url}")
+
             datasource_config = {
                 "apiVersion": 1,
-                "datasources": [
-                    {
-                        "name": "Prometheus",
-                        "type": "prometheus",
-                        "access": "proxy",
-                        "url": self.prometheus_url,
-                        "isDefault": True,
-                        "editable": True,
-                        "jsonData": {
-                            "timeInterval": self.scrape_interval,
-                        },
-                    }
-                ],
+                "datasources": datasources,
             }
 
-            datasource_file = provisioning_dir / "prometheus.yml"
+            datasource_file = provisioning_dir / "datasources.yml"
             with open(datasource_file, "w") as f:
                 yaml.dump(datasource_config, f)
-            print(f"Configured Prometheus datasource at {self.prometheus_url}")
 
             redpanda_root = os.environ.get("BUILD_WORKSPACE_DIRECTORY")
             if redpanda_root:
@@ -551,6 +683,58 @@ async def run_command(cmd: str) -> bool:
         print(f"[{cmd!r}].[stderr]\n{stderr.decode()}")
 
     return proc.returncode == 0
+
+
+async def _enable_tracing(
+    admin_port: int,
+    listen_address: str,
+    tempo_otlp_port: int,
+    sample_rate: float,
+) -> None:
+    """Poll the admin API until reachable, then enable tracing with an
+    exporter pointing at Tempo. Runs as a background task so we don't
+    block cluster startup."""
+    import urllib.error
+    import urllib.request
+
+    url = (
+        f"http://{listen_address}:{admin_port}"
+        "/redpanda.core.admin.v2.TracingService/UpdateTracingConfig"
+    )
+    payload = json.dumps({
+        "config": {
+            "enabled": True,
+            "sampling": {"default_rate": sample_rate},
+            "exporter": {
+                "endpoint_host": listen_address,
+                "endpoint_port": tempo_otlp_port,
+                "path": "/v1/traces",
+            },
+        },
+    }).encode()
+
+    timeout_sec = 60
+    start = time.time()
+    while True:
+        try:
+            req = urllib.request.Request(
+                url, data=payload, headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    print(
+                        f"Tracing enabled via admin API "
+                        f"(sample_rate={sample_rate}, tempo={listen_address}:{tempo_otlp_port})"
+                    )
+                    return
+        except (urllib.error.URLError, ConnectionError, OSError):
+            if (time.time() - start) >= timeout_sec:
+                print(
+                    f"WARNING: could not enable tracing after {timeout_sec}s. "
+                    f"You can enable it manually: POST {url}"
+                )
+                return
+        await asyncio.sleep(1)
 
 
 async def ensure_bucket_exists(cfg: dict[str, Any]) -> None:
@@ -706,6 +890,36 @@ async def main() -> None:
         help="JSON dictionary of config overrides to apply to all nodes",
         default=None,
     )
+    parser.add_argument(
+        "--tempo",
+        type=Path,
+        help="path to tempo executable",
+        default=None,
+    )
+    parser.add_argument(
+        "--use-tracing",
+        action=argparse.BooleanOptionalAction,
+        help="spin up Tempo and auto-enable tracing on the cluster",
+        default=False,
+    )
+    parser.add_argument(
+        "--tempo-api-port",
+        type=int,
+        help="Tempo HTTP API port",
+        default=3200,
+    )
+    parser.add_argument(
+        "--tempo-otlp-port",
+        type=int,
+        help="Tempo OTLP/HTTP receiver port",
+        default=4318,
+    )
+    parser.add_argument(
+        "--tracing-sample-rate",
+        type=float,
+        help="default sampling rate when --use-tracing is set",
+        default=1.0,
+    )
     args, extra_args = parser.parse_known_args()
 
     if extra_args and extra_args[0] == "--":
@@ -840,22 +1054,40 @@ async def main() -> None:
         )
         prometheus_task = asyncio.create_task(prometheus.run())
 
+    tempo = None
+    tempo_task = None
+    if args.use_tracing and args.tempo:
+        tempo_dir = args.directory / "tempo"
+        tempo_dir.mkdir(parents=True, exist_ok=True)
+        tempo = Tempo(
+            args.tempo,
+            tempo_dir,
+            listen_address=args.listen_address,
+            api_port=args.tempo_api_port,
+            otlp_port=args.tempo_otlp_port,
+        )
+        tempo_task = asyncio.create_task(tempo.run())
+
     grafana = None
     grafana_task = None
     if args.use_grafana and args.grafana:
         grafana_dir = args.directory / "grafana"
         grafana_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build Prometheus URL if Prometheus is enabled
         prometheus_url = None
         if prometheus:
             prometheus_url = f"http://{prometheus.listen_address}:{prometheus.port}"
+
+        tempo_url = None
+        if tempo:
+            tempo_url = f"http://{tempo.listen_address}:{tempo.api_port}"
 
         grafana = Grafana(
             args.grafana,
             grafana_dir,
             port=args.grafana_port,
             prometheus_url=prometheus_url,
+            tempo_url=tempo_url,
             scrape_interval=args.scrape_interval,
         )
         grafana_task = asyncio.create_task(grafana.run())
@@ -897,10 +1129,22 @@ async def main() -> None:
             minio.stop()
         if prometheus:
             prometheus.stop()
+        if tempo:
+            tempo.stop()
         if grafana:
             grafana.stop()
 
     asyncio.get_event_loop().add_signal_handler(signal.SIGINT, stop)
+
+    if tempo and args.use_tracing:
+        asyncio.create_task(
+            _enable_tracing(
+                admin_port=args.base_admin_port,
+                listen_address=args.listen_address,
+                tempo_otlp_port=tempo.otlp_port,
+                sample_rate=args.tracing_sample_rate,
+            )
+        )
 
     def failed_exit_code(rc: int) -> bool:
         # ignore -2/SIGINT, natural way to stop the dev cluster.
@@ -931,6 +1175,7 @@ async def main() -> None:
     # then let's go ahead and tear down other services too so we exit
     await stop_and_wait("minio", minio, minio_task)
     await stop_and_wait("prometheus", prometheus, prometheus_task)
+    await stop_and_wait("tempo", tempo, tempo_task)
     await stop_and_wait("grafana", grafana, grafana_task)
 
     if failed:
