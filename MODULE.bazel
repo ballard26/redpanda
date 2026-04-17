@@ -467,6 +467,38 @@ http_archive(
 )
 
 http_archive(
+    name = "tempo_x86_64",
+    add_prefix = "tempo",
+    build_file = "//bazel/thirdparty:tempo.BUILD",
+    sha256 = "5f9e6e26e983030f81860893f8387f5ec19c0a193c66e1a2f0da4b3723e800f6",
+    urls = ["https://github.com/grafana/tempo/releases/download/v2.6.1/tempo_2.6.1_linux_amd64.tar.gz"],
+)
+
+http_archive(
+    name = "tempo_aarch64",
+    add_prefix = "tempo",
+    build_file = "//bazel/thirdparty:tempo.BUILD",
+    sha256 = "33a3c7d63ba7787928c302ef3ad298083142b385387d5337692dc1a1b0b8a40d",
+    urls = ["https://github.com/grafana/tempo/releases/download/v2.6.1/tempo_2.6.1_linux_arm64.tar.gz"],
+)
+
+http_archive(
+    name = "otelcol_x86_64",
+    add_prefix = "otelcol",
+    build_file = "//bazel/thirdparty:otelcol.BUILD",
+    sha256 = "d255ed6a2425f5399b2b5a3b3aa13375c573462222eef917fb5ff3e6329d4ccc",
+    urls = ["https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.112.0/otelcol-contrib_0.112.0_linux_amd64.tar.gz"],
+)
+
+http_archive(
+    name = "otelcol_aarch64",
+    add_prefix = "otelcol",
+    build_file = "//bazel/thirdparty:otelcol.BUILD",
+    sha256 = "95807b692a30382811232267cce0af44ea3191be924684636c41c668c34aea8b",
+    urls = ["https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.112.0/otelcol-contrib_0.112.0_linux_arm64.tar.gz"],
+)
+
+http_archive(
     name = "omb",
     add_prefix = "omb",
     build_file = "//bazel/thirdparty:omb.BUILD",
