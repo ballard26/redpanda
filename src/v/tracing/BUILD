@@ -110,3 +110,21 @@ redpanda_cc_library(
         "@seastar",
     ],
 )
+
+redpanda_cc_library(
+    name = "span_attrs",
+    srcs = [
+        "span_attrs.cc",
+    ],
+    hdrs = [
+        "span_attrs.h",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":span_manager",
+        ":trace",
+        ":types",
+        "//src/v/strings:static_str",
+        "@seastar",
+    ],
+)
