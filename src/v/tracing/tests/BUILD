@@ -58,6 +58,7 @@ redpanda_cc_gtest(
         ":test_span",
         "//src/v/bytes:iobuf",
         "//src/v/test_utils:gtest",
+        "//src/v/test_utils:metrics",
         "//src/v/tracing:span_manager",
         "//src/v/tracing:trace",
         "//src/v/tracing:types",

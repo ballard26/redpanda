@@ -15,9 +15,12 @@
 #include "base/vassert.h"
 #include "base/vlog.h"
 #include "bytes/iobuf.h"
+#include "config/configuration.h"
 #include "container/chunked_circular_buffer.h"
 #include "container/chunked_hash_map.h"
 #include "container/chunked_vector.h"
+#include "metrics/metrics.h"
+#include "metrics/prometheus_sanitize.h"
 #include "random/generators.h"
 #include "ssx/future-util.h"
 #include "tracing/logger.h"
@@ -27,6 +30,7 @@
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/gate.hh>
+#include <seastar/core/metrics.hh>
 #include <seastar/core/shard_id.hh>
 #include <seastar/core/timer.hh>
 
@@ -163,7 +167,116 @@ struct span_manager::impl {
     uint64_t spans_sampled_out = 0;
     uint64_t attributes_dropped = 0;
     uint64_t events_dropped = 0;
+
+    metrics::internal_metric_groups internal_metrics;
+    metrics::public_metric_groups public_metrics;
+
+    void setup_metrics();
 };
+
+void span_manager::impl::setup_metrics() {
+    namespace sm = ss::metrics;
+
+    auto group_name = prometheus_sanitize::metrics_name("tracing");
+
+    auto metric_defs = std::vector<ss::metrics::metric_definition>{};
+    metric_defs.reserve(12);
+
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "spans_recorded_total",
+        [this] { return spans_recorded; },
+        sm::description("Total spans written to the flush buffer"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "spans_dropped_total",
+        [this] { return spans_dropped_buffer; },
+        sm::description(
+          "Total spans dropped because the flush buffer was full"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "spans_flushed_total",
+        [this] { return spans_flushed; },
+        sm::description("Total spans drained from the buffer by flush()"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "spans_sampled_out_total",
+        [this] { return spans_sampled_out; },
+        sm::description("Total root spans rejected by the sampler"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "spans_limited_depth_total",
+        [this] { return spans_limited_depth; },
+        sm::description(
+          "Total spans rejected because they exceeded max_span_depth"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "spans_limited_children_total",
+        [this] { return spans_limited_children; },
+        sm::description(
+          "Total spans rejected because they exceeded "
+          "max_children_per_span"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "spans_limited_active_total",
+        [this] { return spans_limited_active; },
+        sm::description(
+          "Total spans rejected because active spans reached "
+          "max_active_spans_per_shard"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "attributes_dropped_total",
+        [this] { return attributes_dropped; },
+        sm::description(
+          "Total span attributes dropped for exceeding "
+          "max_attributes_per_span"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "events_dropped_total",
+        [this] { return events_dropped; },
+        sm::description(
+          "Total span events dropped for exceeding max_events_per_span"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_counter(
+        "flush_errors_total",
+        [this] { return flush_errors; },
+        sm::description(
+          "Total flush failures (e.g., OTLP endpoint unreachable)"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_gauge(
+        "active_spans",
+        [this] { return active_spans; },
+        sm::description("Currently in-flight spans on this shard"))
+        .aggregate({sm::shard_label}));
+    metric_defs.emplace_back(
+      sm::make_gauge(
+        "buffer_utilization",
+        [this] {
+            return cfg.buffer_size > 0
+                     ? static_cast<double>(buffer.size())
+                         / static_cast<double>(cfg.buffer_size)
+                     : 0.0;
+        },
+        sm::description("Ratio of buffered spans to configured buffer size"))
+        .aggregate({sm::shard_label}));
+
+    if (!::config::shard_local_cfg().disable_metrics()) {
+        internal_metrics.add_group(group_name, metric_defs);
+    }
+    if (!::config::shard_local_cfg().disable_public_metrics()) {
+        public_metrics.add_group(group_name, metric_defs);
+    }
+}
 
 span_manager::span_manager()
   : _impl(std::make_unique<impl>()) {
@@ -181,6 +294,7 @@ span_manager::span_manager()
             ssx::spawn_with_gate(_impl->gate, [this] { return flush(); });
         });
     }
+    _impl->setup_metrics();
 }
 
 span_manager::~span_manager() = default;

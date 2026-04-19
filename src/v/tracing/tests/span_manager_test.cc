@@ -10,6 +10,7 @@
  */
 
 #include "bytes/iobuf.h"
+#include "test_utils/metrics.h"
 #include "test_utils/test.h"
 #include "tracing/span_exporter.h"
 #include "tracing/span_manager.h"
@@ -244,4 +245,73 @@ TEST_F(CollectorFixture, SamplerNameOverrideTakesPrecedence) {
     EXPECT_FALSE(local().try_start_root_span(scope_id::storage, "append"));
     EXPECT_TRUE(local().try_start_root_span(scope_id::storage, "compaction"));
     local().record_span(make_test_span());
+}
+
+// -- Metrics tests --
+
+TEST_F(CollectorFixture, MetricsReflectCounters) {
+    local().record_span(make_test_span());
+    local().record_span(make_test_span());
+
+    auto recorded = test_utils::find_metric_value<uint64_t>(
+      "tracing_spans_recorded_total");
+    ASSERT_TRUE(recorded.has_value());
+    EXPECT_EQ(*recorded, 2);
+
+    local().flush().get();
+
+    auto flushed = test_utils::find_metric_value<uint64_t>(
+      "tracing_spans_flushed_total");
+    ASSERT_TRUE(flushed.has_value());
+    EXPECT_EQ(*flushed, 2);
+}
+
+TEST_F(CollectorFixture, MetricsDroppedCounter) {
+    span_manager::config cfg;
+    cfg.enabled = true;
+    cfg.sampling.default_rate = 1.0;
+    cfg.buffer_size = 2;
+    local().update_config(std::move(cfg));
+
+    local().record_span(make_test_span());
+    local().record_span(make_test_span());
+    local().record_span(make_test_span()); // drops oldest
+
+    auto dropped = test_utils::find_metric_value<uint64_t>(
+      "tracing_spans_dropped_total");
+    ASSERT_TRUE(dropped.has_value());
+    EXPECT_EQ(*dropped, 1);
+}
+
+TEST_F(CollectorFixture, MetricsActiveSpansGauge) {
+    EXPECT_TRUE(local().try_start_span(0, 0));
+    EXPECT_TRUE(local().try_start_span(0, 0));
+
+    auto active = test_utils::find_metric_value<double>("tracing_active_spans");
+    ASSERT_TRUE(active.has_value());
+    EXPECT_EQ(*active, 2.0);
+
+    local().record_span(make_test_span());
+    active = test_utils::find_metric_value<double>("tracing_active_spans");
+    ASSERT_TRUE(active.has_value());
+    EXPECT_EQ(*active, 1.0);
+}
+
+// Exporter that throws on every export to exercise the flush error path.
+class throwing_exporter : public span_exporter {
+public:
+    ss::future<> export_spans(iobuf) override {
+        throw std::runtime_error("simulated export failure");
+    }
+};
+
+TEST_F(CollectorFixture, FlushErrorIncrementsCounter) {
+    _collector.local()
+      .set_exporter(std::make_unique<throwing_exporter>())
+      .get();
+
+    local().record_span(make_test_span());
+    local().flush().get();
+
+    EXPECT_EQ(local().get_status().flush_errors, 1);
 }
