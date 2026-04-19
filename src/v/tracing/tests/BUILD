@@ -13,6 +13,24 @@ redpanda_cc_library(
 )
 
 redpanda_cc_gtest(
+    name = "span_guard_test",
+    timeout = "short",
+    srcs = [
+        "span_guard_test.cc",
+    ],
+    deps = [
+        "//src/v/tracing:span_guard",
+        "//src/v/tracing:span_manager",
+        "//src/v/tracing:trace",
+        "//src/v/tracing:types",
+        "//src/v/test_utils:gtest",
+        "@boost//:range",
+        "@googletest//:gtest",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_gtest(
     name = "span_manager_test",
     timeout = "short",
     srcs = [
