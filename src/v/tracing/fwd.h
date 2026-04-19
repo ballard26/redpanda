@@ -35,6 +35,7 @@ namespace coroutine {
 class scoped_span_guard;
 } // namespace coroutine
 class span_attrs;
+class span_exporter;
 class span_manager;
 
 } // namespace tracing

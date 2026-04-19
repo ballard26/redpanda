@@ -13,6 +13,24 @@ redpanda_cc_library(
 )
 
 redpanda_cc_gtest(
+    name = "span_manager_test",
+    timeout = "short",
+    srcs = [
+        "span_manager_test.cc",
+    ],
+    deps = [
+        ":test_span",
+        "//src/v/bytes:iobuf",
+        "//src/v/test_utils:gtest",
+        "//src/v/tracing:span_manager",
+        "//src/v/tracing:trace",
+        "//src/v/tracing:types",
+        "@googletest//:gtest",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_gtest(
     name = "serialization_test",
     timeout = "short",
     srcs = [
