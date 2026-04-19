@@ -16,6 +16,7 @@
 #include "base/vlog.h"
 #include "bytes/iobuf.h"
 #include "config/configuration.h"
+#include "config/node_config.h"
 #include "container/chunked_circular_buffer.h"
 #include "container/chunked_hash_map.h"
 #include "container/chunked_vector.h"
@@ -172,6 +173,7 @@ struct span_manager::impl {
     metrics::public_metric_groups public_metrics;
 
     void setup_metrics();
+    void setup_resource_attrs();
 };
 
 void span_manager::impl::setup_metrics() {
@@ -278,16 +280,48 @@ void span_manager::impl::setup_metrics() {
     }
 }
 
-span_manager::span_manager()
-  : _impl(std::make_unique<impl>()) {
-    set_local_span_manager(this);
+void span_manager::impl::setup_resource_attrs() {
     // OTel requires service.name on every resource. Without it,
     // backends (e.g., Tempo) fail to attribute spans to a service and
     // display "<root span not yet received>" in place of the service.
-    _impl->resource.attributes.push_back(key_value{
-      .key = static_str{"service.name"},
-      .value = ss::sstring("redpanda"),
-    });
+    resource.attributes.push_back(
+      key_value{
+        .key = static_str{"service.name"},
+        .value = ss::sstring("redpanda"),
+      });
+    // service.instance.id distinguishes spans per node in a cluster.
+    // Resolved from node_config; empty on first boot before node_id
+    // assignment — spans exported before assignment lack the attribute,
+    // which is acceptable.
+    if (auto node_id = ::config::node().node_id(); node_id.has_value()) {
+        resource.attributes.push_back(
+          key_value{
+            .key = static_str{"service.instance.id"},
+            .value = ss::sstring(fmt::to_string(node_id->operator()())),
+          });
+    }
+    // service.namespace groups nodes sharing a cluster_id.
+    if (auto cluster_id = ::config::shard_local_cfg().cluster_id();
+        cluster_id.has_value() && !cluster_id->empty()) {
+        resource.attributes.push_back(
+          key_value{
+            .key = static_str{"service.namespace"},
+            .value = ss::sstring{*cluster_id},
+          });
+    }
+    // thread.id = shard_id. Each shard's ResourceSpans batch is sent
+    // separately, so per-shard resources correctly partition spans.
+    resource.attributes.push_back(
+      key_value{
+        .key = static_str{"thread.id"},
+        .value = static_cast<int64_t>(ss::this_shard_id()),
+      });
+}
+
+span_manager::span_manager()
+  : _impl(std::make_unique<impl>()) {
+    set_local_span_manager(this);
+    _impl->setup_resource_attrs();
     if (ss::this_shard_id() == 0) {
         _impl->exporter = std::make_unique<noop_span_exporter>();
         _impl->flush_timer.set_callback([this] {
