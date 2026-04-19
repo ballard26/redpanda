@@ -29,6 +29,7 @@ struct span_link;
 struct span_status;
 struct span;
 struct trace_context;
+struct trace_ref;
 struct instrumentation_scope;
 
 namespace coroutine {

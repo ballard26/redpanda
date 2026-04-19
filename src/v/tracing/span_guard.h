@@ -42,6 +42,9 @@ make_root_trace_context(static_str name, span_opts opts) noexcept;
 ss::lw_shared_ptr<ss::task_context> make_child_trace_context(
   trace_context* parent, static_str name, span_opts opts) noexcept;
 
+ss::lw_shared_ptr<ss::task_context> make_child_trace_context_from_ref(
+  const trace_ref& ref, static_str name, span_opts opts) noexcept;
+
 void record_and_end_span(ss::lw_shared_ptr<ss::task_context> ctx) noexcept;
 
 /// Run \c func under \c ctx (empty ctx = passthrough) and record the
@@ -166,6 +169,18 @@ trace_root_span(static_str name, span_opts opts) noexcept {
       detail::make_root_trace_context(name, opts)};
 }
 
+/// Create a child span in a coroutine, seeded from a \ref trace_ref
+/// typically produced on another shard by \c extract_trace_ref.
+/// Must be co_await-ed. No-op if the ref is empty or tracing is off.
+[[nodiscard]] inline scoped_span_guard_awaitable trace_span_from_ref(
+  const trace_ref& ref, static_str name, span_opts opts) noexcept {
+    if (!ref) [[likely]] {
+        return scoped_span_guard_awaitable{{}};
+    }
+    return scoped_span_guard_awaitable{
+      detail::make_child_trace_context_from_ref(ref, name, opts)};
+}
+
 } // namespace coroutine
 
 /// Execute \c func under a root span for \c .then()-style callers.
@@ -192,6 +207,24 @@ template<typename Func, typename... Args>
     ss::lw_shared_ptr<ss::task_context> ctx;
     if (parent) {
         ctx = detail::make_child_trace_context(parent, name, opts);
+    }
+    return detail::with_traced_context(
+      std::move(ctx), std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+/// Execute \c func under a child span seeded from a \ref trace_ref,
+/// typically produced on another shard by \c extract_trace_ref.
+/// No-op passthrough when the ref is empty or tracing is off.
+template<typename Func, typename... Args>
+[[nodiscard]] auto trace_span_from_ref(
+  const trace_ref& ref,
+  static_str name,
+  span_opts opts,
+  Func&& func,
+  Args&&... args) noexcept {
+    ss::lw_shared_ptr<ss::task_context> ctx;
+    if (ref) {
+        ctx = detail::make_child_trace_context_from_ref(ref, name, opts);
     }
     return detail::with_traced_context(
       std::move(ctx), std::forward<Func>(func), std::forward<Args>(args)...);

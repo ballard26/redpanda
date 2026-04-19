@@ -248,6 +248,133 @@ TEST_F_CORO(TracingFixture, TraceCallPassthroughWithoutParent) {
     ASSERT_TRUE_CORO(ran);
 }
 
+// -- Cross-shard trace_ref --
+
+TEST_F_CORO(TracingFixture, ExtractTraceRefEmptyWithoutContext) {
+    auto ref = extract_trace_ref();
+    ASSERT_FALSE_CORO(static_cast<bool>(ref));
+    co_return;
+}
+
+TEST_F_CORO(TracingFixture, ExtractTraceRefCapturesCurrentSpan) {
+    auto root = co_await coroutine::trace_root_span("captured", {.scope = scope_id::kafka});
+    auto* ctx = current_trace();
+    ASSERT_NE_CORO(ctx, nullptr);
+
+    auto ref = extract_trace_ref();
+    ASSERT_TRUE_CORO(static_cast<bool>(ref));
+    ASSERT_TRUE_CORO(ref.trace_id == ctx->current_span.trace_id);
+    ASSERT_TRUE_CORO(ref.span_id == ctx->current_span.span_id);
+    ASSERT_EQ_CORO(ref.depth, ctx->depth);
+}
+
+TEST_F_CORO(TracingFixture, SpanFromRefCreatesChildOnSameShard) {
+    auto root = co_await coroutine::trace_root_span("root", {.scope = scope_id::kafka});
+    auto ref = extract_trace_ref();
+    auto root_trace_id = ref.trace_id;
+    auto root_span_id = ref.span_id;
+
+    {
+        auto child = co_await coroutine::trace_span_from_ref(ref, "from_ref", {.scope = scope_id::raft});
+        ASSERT_TRUE_CORO(static_cast<bool>(child));
+
+        auto* ctx = current_trace();
+        ASSERT_NE_CORO(ctx, nullptr);
+        ASSERT_TRUE_CORO(ctx->current_span.trace_id == root_trace_id);
+        ASSERT_TRUE_CORO(ctx->current_span.parent_span_id == root_span_id);
+        ASSERT_TRUE_CORO(ctx->current_span.span_id != root_span_id);
+        ASSERT_EQ_CORO(ctx->depth, 1);
+    }
+}
+
+TEST_F_CORO(TracingFixture, SpanFromRefNoopWithEmptyRef) {
+    trace_ref empty{};
+    auto guard = co_await coroutine::trace_span_from_ref(empty, "no_parent", {.scope = scope_id::raft});
+    ASSERT_FALSE_CORO(static_cast<bool>(guard));
+}
+
+TEST_F_CORO(TracingFixture, SpanFromRefCrossShard) {
+    auto root = co_await coroutine::trace_root_span("root", {.scope = scope_id::kafka});
+    auto ref = extract_trace_ref();
+    auto root_trace_id = ref.trace_id;
+    auto root_span_id = ref.span_id;
+
+    // Validate the cross-shard flow: submit to a different shard and
+    // construct a child span there seeded only by the ref.
+    auto target_shard = (ss::this_shard_id() + 1) % ss::smp::count;
+    co_await _collector.invoke_on(
+      target_shard, [ref, root_trace_id, root_span_id](span_manager&) {
+          return trace_span_from_ref(ref, "remote_child", {.scope = scope_id::raft},
+            [root_trace_id, root_span_id]() -> ss::future<> {
+                auto* ctx = current_trace();
+                EXPECT_NE(ctx, nullptr);
+                if (ctx) {
+                    EXPECT_TRUE(ctx->current_span.trace_id == root_trace_id);
+                    EXPECT_TRUE(
+                      ctx->current_span.parent_span_id == root_span_id);
+                    EXPECT_EQ(ctx->depth, 1);
+                }
+                return ss::now();
+            });
+      });
+}
+
+TEST_F_CORO(TracingFixture, TraceSpanFromRefWrapperNoopWithEmptyRef) {
+    trace_ref empty{};
+    bool ran = false;
+    co_await trace_span_from_ref(empty, "no_parent", {.scope = scope_id::raft}, [&]() -> ss::future<> {
+          ran = true;
+          EXPECT_EQ(current_trace(), nullptr);
+          return ss::now();
+      });
+    ASSERT_TRUE_CORO(ran);
+}
+
+TEST_F_CORO(TracingFixture, TraceSpanFromRefWrapperCreatesChildOnSameShard) {
+    auto root = co_await coroutine::trace_root_span("root", {.scope = scope_id::kafka});
+    auto ref = extract_trace_ref();
+    auto root_trace_id = ref.trace_id;
+    auto root_span_id = ref.span_id;
+
+    co_await trace_span_from_ref(ref, "child", {.scope = scope_id::raft},
+      [root_trace_id, root_span_id]() -> ss::future<> {
+          auto* ctx = current_trace();
+          EXPECT_NE(ctx, nullptr);
+          if (ctx) {
+              EXPECT_TRUE(ctx->current_span.trace_id == root_trace_id);
+              EXPECT_TRUE(ctx->current_span.parent_span_id == root_span_id);
+              EXPECT_EQ(ctx->depth, 1);
+          }
+          return ss::now();
+      });
+
+    // Root context restored after the wrapper completes.
+    auto* after = current_trace();
+    ASSERT_NE_CORO(after, nullptr);
+    ASSERT_TRUE_CORO(after->current_span.span_id == root_span_id);
+}
+
+TEST_F_CORO(TracingFixture, TraceSpanFromRefWrapperCoversAsyncWork) {
+    auto root = co_await coroutine::trace_root_span("root", {.scope = scope_id::kafka});
+    auto ref = extract_trace_ref();
+    auto root_trace_id = ref.trace_id;
+
+    // Async body — exercises the .finally path (not the available-future
+    // short-circuit).
+    co_await trace_span_from_ref(ref, "async_child", {.scope = scope_id::raft},
+      [root_trace_id]() -> ss::future<> {
+          co_await ss::sleep(1ms);
+          auto* ctx = current_trace();
+          EXPECT_NE(ctx, nullptr);
+          if (ctx) {
+              EXPECT_TRUE(ctx->current_span.trace_id == root_trace_id);
+          }
+      });
+
+    // Parent span still active after the async child completes.
+    ASSERT_NE_CORO(current_trace(), nullptr);
+}
+
 // -- Manager shutdown with active guards --
 
 TEST_CORO(TracingShutdown, GuardDestructorSafeAfterManagerStop) {

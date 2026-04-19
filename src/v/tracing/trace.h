@@ -58,4 +58,19 @@ inline trace_context* current_trace() noexcept {
     return static_cast<trace_context*>(ctx);
 }
 
+/// Snapshot the current span identity as a \ref trace_ref, suitable
+/// for passing across shards (or out of process). Returns an empty
+/// ref when not tracing.
+inline trace_ref extract_trace_ref() noexcept {
+    auto* ctx = current_trace();
+    if (!ctx) [[likely]] {
+        return {};
+    }
+    return trace_ref{
+      .trace_id = ctx->current_span.trace_id,
+      .span_id = ctx->current_span.span_id,
+      .depth = ctx->depth,
+    };
+}
+
 } // namespace tracing

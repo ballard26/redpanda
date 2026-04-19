@@ -62,6 +62,19 @@ struct span_status {
     ss::sstring message;
 };
 
+/// Opaque reference to a parent span, safe to copy across shards.
+/// Holds the minimal information needed to create a child span on
+/// another shard.
+struct trace_ref {
+    trace_id_t trace_id{};
+    span_id_t span_id{};
+    uint16_t depth = 0;
+
+    explicit operator bool() const noexcept {
+        return trace_id != trace_id_t{};
+    }
+};
+
 struct span {
     trace_id_t trace_id{};
     span_id_t span_id{};

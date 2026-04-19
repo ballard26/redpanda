@@ -53,6 +53,30 @@ ss::lw_shared_ptr<ss::task_context> make_child_trace_context(
     return ctx_ptr;
 }
 
+ss::lw_shared_ptr<ss::task_context> make_child_trace_context_from_ref(
+  const trace_ref& ref, static_str name, span_opts opts) noexcept {
+    auto* collector = local_span_manager();
+    // Sibling count is unknown on the receiving shard — check depth
+    // only. Cross-shard children don't contribute to the parent's
+    // on-shard child limit.
+    if (!collector || !collector->try_start_span(ref.depth, 0)) {
+        return {};
+    }
+
+    auto ctx_ptr = make_trace_context();
+    auto* ctx = static_cast<trace_context*>(ctx_ptr.get());
+    auto& s = ctx->current_span;
+    s.trace_id = ref.trace_id;
+    s.span_id = generate_span_id();
+    s.parent_span_id = ref.span_id;
+    s.name = name;
+    s.scope = opts.scope;
+    s.kind = opts.kind;
+    s.start_time_unix_nano = trace_now_ns();
+    ctx->depth = ref.depth + 1;
+    return ctx_ptr;
+}
+
 ss::lw_shared_ptr<ss::task_context>
 make_root_trace_context(static_str name, span_opts opts) noexcept {
     auto* mgr = local_span_manager();
