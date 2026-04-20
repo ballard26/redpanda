@@ -73,4 +73,32 @@ inline trace_ref extract_trace_ref() noexcept {
     };
 }
 
+/// Mark the current span as failed with a short explanatory message.
+/// No-op when not tracing. Prefer over direct status assignment; this
+/// is the API backends (Tempo, Jaeger, ...) filter on.
+inline void set_span_error(std::string_view message) noexcept {
+    auto* ctx = current_trace();
+    if (!ctx) [[likely]] {
+        return;
+    }
+    ctx->current_span.status = span_status{
+      .code = status_code::error,
+      .message = ss::sstring{message},
+    };
+}
+
+/// Mark the current span as successful. Rarely needed — backends treat
+/// unset status as success. Use when a path would otherwise be
+/// ambiguous (e.g., retries that ultimately succeed).
+inline void set_span_ok() noexcept {
+    auto* ctx = current_trace();
+    if (!ctx) [[likely]] {
+        return;
+    }
+    ctx->current_span.status = span_status{
+      .code = status_code::ok,
+      .message = {},
+    };
+}
+
 } // namespace tracing

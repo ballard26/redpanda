@@ -196,6 +196,35 @@ TEST_F(TracingFixture, ChildrenLimitEnforced) {
     EXPECT_FALSE(_collector.local().try_start_span(0, 2));
 }
 
+// -- set_span_error / set_span_ok --
+
+TEST_F(TracingFixture, SetSpanErrorNoopWithoutContext) {
+    set_span_error("should not crash");
+    EXPECT_EQ(current_trace(), nullptr);
+}
+
+TEST_F_CORO(TracingFixture, SetSpanErrorSetsStatus) {
+    auto guard = co_await coroutine::trace_root_span(
+      "errored", {.scope = scope_id::kafka});
+    set_span_error("boom");
+
+    auto* ctx = current_trace();
+    ASSERT_NE_CORO(ctx, nullptr);
+    ASSERT_EQ_CORO(ctx->current_span.status.code, status_code::error);
+    ASSERT_EQ_CORO(ctx->current_span.status.message, "boom");
+}
+
+TEST_F_CORO(TracingFixture, SetSpanOkSetsStatus) {
+    auto guard = co_await coroutine::trace_root_span(
+      "succeeded", {.scope = scope_id::kafka});
+    set_span_ok();
+
+    auto* ctx = current_trace();
+    ASSERT_NE_CORO(ctx, nullptr);
+    ASSERT_EQ_CORO(ctx->current_span.status.code, status_code::ok);
+    ASSERT_TRUE_CORO(ctx->current_span.status.message.empty());
+}
+
 // -- trace_root_span / trace_span wrappers --
 
 TEST_F_CORO(TracingFixture, TraceRootCallCoversAsyncWork) {
